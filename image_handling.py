@@ -26,7 +26,7 @@ def segment_image(image=None, no_segments=500):
 	if image.shape[0] != 3:
 		raise ValueError('First dimension of image is not 3')
 
-	mask = slic(np.transpose(image, (1, 2, 0)), n_segments=no_segments, compactness=10, sigma=1)
+	mask = slic(np.transpose(image, (1, 2, 0)), n_segments=no_segments, compactness=15, sigma=1)
 	return mask
 
 def calculate_sp_centroids(mask=None):
@@ -87,33 +87,115 @@ def load_dataset_segments(
 	no_superpixels=500,
 	x_window_size=10,
 	y_window_size=10,
-	no_images=None):
+	images=None):
 	"""
 	Combines all of the above to load images segments and their associated
 	depths from a dataset and and return them as a tuple of ndarrays.
 	"""
-	if no_images == None:
-		no_images = images.shape[0]
-
-	[images, depths] = load_dataset(filename)
-	no_segments = no_superpixels * no_images
+	if images == None:
+		images = range(0, images.shape[0])
+	if type(images) is not tuple:
+		images = range(0, images)
+	
+	[image_set, depths] = load_dataset(filename)
+	no_segments = no_superpixels * len(images)
 	segment_depths = np.zeros((no_segments, 1))
 	image_segments = np.ndarray((no_segments,
-								 images.shape[1],
+								 image_set.shape[1],
 								 2 * x_window_size + 1,
 								 2 * y_window_size + 1))
 
 	current_segment = 0
-	for image_idx in range(0, no_images):
-		image = np.array(images[image_idx, ...])
+	for image_idx in images:
+		image = np.array(image_set[image_idx, ...])
 		mask = segment_image(image, no_segments=no_superpixels)
 		centroids = calculate_sp_centroids(mask)
 		center_pixels = np.array(centroids, dtype=int)
-		image_segments[current_segment:(current_segment+centroids.shape[1]), ...] = gather_regions(image, centroids, x_window_size=x_window_size, y_window_size=y_window_size)
+
+		end_index = current_segment + centroids.shape[1]
+		if end_index >= image_segments.shape[0]:
+			image_segments.resize((end_index + 1,) + image_segments.shape[1:])
+		if end_index >= segment_depths.shape[0]:
+			segment_depths.resize((end_index + 1,) + segment_depths.shape[1:])
+
+		image_segments[current_segment:(current_segment+centroids.shape[1]), ...] = \
+			gather_regions(image, centroids, x_window_size=x_window_size, y_window_size=y_window_size)
  		for depth_idx in range(0, centroids.shape[1]):
- 			segment_depths[current_segment + depth_idx] = depths[image_idx, center_pixels[0, depth_idx], center_pixels[1 , depth_idx]]
+ 			segment_depths[current_segment + depth_idx] = \
+ 				depths[image_idx, center_pixels[0, depth_idx], center_pixels[1 , depth_idx]]
  		current_segment = current_segment + centroids.shape[1]
 
  	return image_segments[0:current_segment, ...], segment_depths[0:current_segment, ...]
+
+
+
+def create_segments_dataset(
+	input_filename=None,
+	output_filename=None,
+	no_superpixels=500,
+	x_window_size=10,
+	y_window_size=10,
+	images=None):
+	"""
+	Combines all of the above to load images segments and their associated
+	depths from a dataset and and return them as a tuple of ndarrays.
+	"""
+	if images == None:
+		images = range(0, images.shape[0])
+	if type(images) is not tuple:
+		images = range(0, images)
+	
+	[image_set, depths] = load_dataset(input_filename)
+	no_segments = no_superpixels * len(images)
+
+	output_file = h5py.File(output_filename, 'w')
+	image_segments = output_file.create_dataset("data",
+		(no_segments, image_set.shape[1], 2 * x_window_size + 1, 2 * y_window_size + 1),
+		chunks=(1, image_set.shape[1], 2 * x_window_size + 1, 2 * y_window_size + 1))
+
+	segment_depths = output_file.create_dataset("label", (no_segments, 1), chunks=True)
+	segment_image_index = output_file.create_dataset("image", (no_segments, 1), chunks=True)
+	segment_superpixel_index = output_file.create_dataset("pixel", (no_segments, 1), chunks=True)
+
+	current_segment = 0
+	for image_idx in images:
+		image = np.array(image_set[image_idx, ...])
+		mask = segment_image(image, no_segments=no_superpixels)
+		centroids = calculate_sp_centroids(mask)
+		center_pixels = np.array(centroids, dtype=int)
+
+		# Resize the arrays if they ended up being too small.
+		# Will probably only be called on the last image if at all.
+		end_index = current_segment+centroids.shape[1]
+		if end_index >= image_segments.shape[0]:
+			image_segments.resize((end_index + 1,) + image_segments.shape[1:])
+			segment_depths.resize((end_index + 1,) + segment_depths.shape[1:])
+			segment_image_index.resize((end_index + 1,) + segment_image_index.shape[1:])
+			segment_superpixel_index.resize((end_index + 1,) + segment_superpixel_index.shape[1:])
+
+		# Pull out sections around the centroid of the superpixel
+		image_segments[current_segment:end_index, ...] = \
+				gather_regions(image, centroids,
+						x_window_size=x_window_size,
+						y_window_size=y_window_size)
+
+	    # Pull out the appropriate depth images.
+ 		for depth_idx in range(0, centroids.shape[1]):
+ 			segment_depths[current_segment + depth_idx] = \
+ 					depths[image_idx,
+ 					       center_pixels[0, depth_idx],
+ 						   center_pixels[1, depth_idx]]
+
+ 		current_segment = current_segment + centroids.shape[1]
+
+ 	# If the number of superpixels was smaller than we expected, resize the
+ 	# arrays before returning them
+ 	if current_segment != image_segments.shape[0]:
+		image_segments.resize((current_segment,) + image_segments.shape[1:])
+		segment_depths.resize((current_segment,)  + segment_depths.shape[1:])
+		segment_image_index.resize((current_segment,) + segment_image_index.shape[1:])
+		segment_superpixel_index.resize((current_segment,) + segment_superpixel_index.shape[1:])
+
+ 	return output_file
 
 
