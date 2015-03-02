@@ -11,7 +11,7 @@ def load_dataset(filename=None):
 
 	"""
 
-	nyu_set = h5py.File('nyu_depth_v2_labeled.mat')
+	nyu_set = h5py.File('nyu_depth_v2_labeled.mat', 'r')
 	images = nyu_set['images']
 	depths = nyu_set['depths']
 	return [images, depths]
