@@ -2,7 +2,9 @@ import h5py
 import numpy as np
 from skimage.segmentation import slic
 from skimage.segmentation import mark_boundaries
-
+import os
+import scipy
+import matplotlib.pyplot as plt
 
 def load_dataset(filename=None):
 	""" 
@@ -11,7 +13,7 @@ def load_dataset(filename=None):
 
 	"""
 
-	nyu_set = h5py.File('nyu_depth_v2_labeled.mat', 'r')
+	nyu_set = h5py.File(filename, 'r')
 	images = nyu_set['images']
 	depths = nyu_set['depths']
 	return [images, depths]
@@ -135,18 +137,28 @@ def create_segments_dataset(
 	no_superpixels=500,
 	x_window_size=10,
 	y_window_size=10,
-	images=None):
+	images=None,
+	output_filepath=None):
 	"""
 	Combines all of the above to load images segments and their associated
 	depths from a dataset and and return them as a tuple of ndarrays.
 	"""
+
 	if images == None:
-		images = range(0, images.shape[0])
+		images = range(0, image_set.shape[0])
 	if type(images) is not tuple:
 		images = range(0, images)
 	
 	[image_set, depths] = load_dataset(input_filename)
 	no_segments = no_superpixels * len(images)
+
+	# Check whether to output individual images
+	indiv_output = (output_filepath is not None)
+	if indiv_output:
+		out_log = open(output_filepath + '/index.txt','w')
+		if not os.path.exists(output_filepath):
+			os.makedirs(output_filepath)
+
 
 	output_file = h5py.File(output_filename, 'w')
 	image_segments = output_file.create_dataset("data",
@@ -186,8 +198,20 @@ def create_segments_dataset(
  					       center_pixels[0, depth_idx],
  						   center_pixels[1, depth_idx]]
 
- 		current_segment = current_segment + centroids.shape[1]
+ 		#print image_segments[current_segment:end_index, ...].shape
+ 		#print end_index-current_segment
+		for i in range(current_segment,end_index):
+				name = output_filepath + '/' + str(image_idx) + '_' + str(i) + '.png'
+				# write image
+				print image_segments[i, ...].shape
+				#plt.imshow(image_segments[i, ...])
+				scipy.misc.imsave(name,np.transpose(image_segments[i, ...],(0,2,1)))
+				# append to log
+				print segment_depths[i]
+				out_log.write(name + ' ' + str(segment_depths[i][0]) + '\n')
 
+
+ 		current_segment = current_segment + centroids.shape[1]
  	# If the number of superpixels was smaller than we expected, resize the
  	# arrays before returning them
  	if current_segment != image_segments.shape[0]:
@@ -196,6 +220,7 @@ def create_segments_dataset(
 		segment_image_index.resize((current_segment,) + segment_image_index.shape[1:])
 		segment_superpixel_index.resize((current_segment,) + segment_superpixel_index.shape[1:])
 
- 	return output_file
+	
 
+ 	return output_file
 
