@@ -18,6 +18,18 @@ def load_dataset(filename=None):
 	depths = nyu_set['depths']
 	return [images, depths]
 
+def log_pixelate_values(array, min_val, max_val, bins):
+	"""
+	Given an array or an hdf5 object, log_pixelate_values takes the values along
+	the array and bins them into integer values representing bins that are log
+	spaced from the min to the max value. This should work on any dimension of
+	array.
+	"""
+    cuts = np.logspace(np.log(min_val), np.log(max_val), num=bins, base=np.e)
+    array_vals = np.array(array[:])
+    val = np.reshape(np.digitize(array_vals.flatten(), cuts), array.shape)
+    return val
+
 def segment_image(image=None, no_segments=500):
 	"""
 	Break the images into no_segments parts using the SLIC algorithm.  The
