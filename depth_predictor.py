@@ -15,16 +15,17 @@ class DepthPredictor():
       # Instantiate net
       self.unaryCNN = caffe.Net(model_file,pretrained_file)
 
+      print self.unaryCNN.inputs
       # Params (Likely constant for image sets)
-      self.unaryCNN.set_raw_scale(self.unaryCNN.inputs[0], 255)
+      #self.unaryCNN.set_raw_scale(self.unaryCNN.inputs[0], 255)
       # order of channels: RGB, BGR, etc? 
-      self.unaryCNN.set_channel_swap(self.unaryCNN.inputs[0], (2,1,0))
+      #self.unaryCNN.set_channel_swap(self.unaryCNN.inputs[0], (2,1,0))
 
       # mean file?
-      if meanfile is not None:
-         self.unaryCNN.set_mean(unaryCNN.inputs[0], meanfile)
+      # if meanfile is not None:
+      #   self.unaryCNN.set_mean(unaryCNN.inputs[0], meanfile)
 
-      self.unaryCNN.crop_dims = np.array(self.unaryCNN.blobs[self.unaryCNN.inputs[0]].data.shape[2:])
+      #self.unaryCNN.crop_dims = np.array(self.unaryCNN.blobs[self.unaryCNN.inputs[0]].data.shape[2:])
       self.unaryCNN.image_dims = image_dims
 
 
@@ -58,3 +59,18 @@ class DepthPredictor():
          predictions = predictions.mean(1)
 
       return predictions
+
+   def train(self,solver_path=None):
+      """
+       Trains the convnet, using the solver defined in solver_path.prototxt
+      """
+      if self.unaryCNN==None:
+         print 'Please load a model file first!'
+
+
+      S = SGDSolver(solver_path)
+
+      print type(S)
+
+
+
