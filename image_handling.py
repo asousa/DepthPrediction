@@ -25,10 +25,10 @@ def log_pixelate_values(array, min_val, max_val, bins):
 	spaced from the min to the max value. This should work on any dimension of
 	array.
 	"""
-    cuts = np.logspace(np.log(min_val), np.log(max_val), num=bins, base=np.e)
-    array_vals = np.array(array[:])
-    val = np.reshape(np.digitize(array_vals.flatten(), cuts), array.shape)
-    return val
+	cuts = np.logspace(np.log(min_val), np.log(max_val), num=bins, base=np.e)
+	array_vals = np.array(array[:],dtype=int)
+	val = np.reshape(np.digitize(array_vals.flatten(), cuts), array.shape)
+	return val
 
 def segment_image(image=None, no_segments=500):
 	"""
@@ -100,8 +100,7 @@ def load_dataset_segments(
 	filename=None,
 	no_superpixels=500,
 	x_window_size=10,
-	y_window_size=10,
-	images=None):
+	y_window_size=10):
 	"""
 	Combines all of the above to load images segments and their associated
 	depths from a dataset and and return them as a tuple of ndarrays.
@@ -150,10 +149,14 @@ def create_segments_dataset(
 	x_window_size=10,
 	y_window_size=10,
 	images=None,
-	output_filepath=None):
+	image_output_filepath=None,
+	depth_bins=None, depth_min = None, depth_max=None):
 	"""
 	Combines all of the above to load images segments and their associated
 	depths from a dataset and and return them as a tuple of ndarrays.
+
+	-To output a directory of images w/ index file, provide image_output_filepath.
+	-To quantize delivered depths into bins, provide depth_bins, depth_min, depth_max
 	"""
 
 	if images == None:
@@ -165,12 +168,11 @@ def create_segments_dataset(
 	no_segments = no_superpixels * len(images)
 
 	# Check whether to output individual images
-	indiv_output = (output_filepath is not None)
+	indiv_output = (image_output_filepath is not None)
 	if indiv_output:
-		out_log = open(output_filepath + '/index.txt','w')
-		if not os.path.exists(output_filepath):
-			os.makedirs(output_filepath)
-
+		if not os.path.exists(image_output_filepath):
+			os.makedirs(image_output_filepath)
+		out_log = open(image_output_filepath + '/index.txt','w+')
 
 	output_file = h5py.File(output_filename, 'w')
 	image_segments = output_file.create_dataset("data",
@@ -210,17 +212,25 @@ def create_segments_dataset(
  					       center_pixels[0, depth_idx],
  						   center_pixels[1, depth_idx]]
 
+ 		# Convert depths to quantized logspace:
+ 		if (depth_bins is not None):
+ 			print 'quantizing depths'
+ 			segment_depths[current_segment:current_segment+centroids.shape[1]] = \
+ 			log_pixelate_values(segment_depths[current_segment:current_segment+centroids.shape[1]],
+ 				depth_bins, depth_min, depth_max)
+
  		#print image_segments[current_segment:end_index, ...].shape
  		#print end_index-current_segment
-		for i in range(current_segment,end_index):
-				name = output_filepath + '/' + str(image_idx) + '_' + str(i) + '.png'
+ 		if indiv_output:
+			for i in range(current_segment,end_index):
+				name = image_output_filepath + '/' + str(image_idx) + '_' + str(i) + '.jpg'
 				# write image
-				print image_segments[i, ...].shape
+				#print image_segments[i, ...].shape
 				#plt.imshow(image_segments[i, ...])
 				scipy.misc.imsave(name,np.transpose(image_segments[i, ...],(0,2,1)))
 				# append to log
-				print segment_depths[i]
-				out_log.write(name + ' ' + str(segment_depths[i][0]) + '\n')
+				#print segment_depths[i]
+				out_log.write(name + ' ' + str(int(segment_depths[i][0])) + '\n')
 
 
  		current_segment = current_segment + centroids.shape[1]
@@ -231,8 +241,6 @@ def create_segments_dataset(
 		segment_depths.resize((current_segment,)  + segment_depths.shape[1:])
 		segment_image_index.resize((current_segment,) + segment_image_index.shape[1:])
 		segment_superpixel_index.resize((current_segment,) + segment_superpixel_index.shape[1:])
-
-	
 
  	return output_file
 
