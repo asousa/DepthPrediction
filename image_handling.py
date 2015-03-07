@@ -359,4 +359,38 @@ def create_segments_directory(
  		current_segment = current_segment + centroids.shape[1]
 
 
+def find_neighbors(mask):
+    """
+    Generates a list of edges that connect neighboring superpixels that
+    connect each other from a segmentation mask.
+    Returns a Nx2 np.array of edges.
+    """
+    # Generate a symmetric matrix with a one representing a neighboring
+    # connection
+    no_pixels=len(np.unique(mask))
+    adjacent = np.zeros((no_pixels,no_pixels), dtype=bool)
+    for idx_x in range(0, mask.shape[0]-1):
+        for idx_y in range(0, mask.shape[1]-1):
+            # Check left to right
+            if mask[idx_x][idx_y] != mask[idx_x+1][idx_y]:
+                adjacent[mask[idx_x][idx_y], mask[idx_x+1][idx_y]] = 1
+                adjacent[mask[idx_x+1][idx_y], mask[idx_x][idx_y]] = 1
+            # Check Top-Down
+            if mask[idx_x][idx_y] != mask[idx_x][idx_y+1]:
+                adjacent[mask[idx_x][idx_y], mask[idx_x][idx_y+1]] = 1
+                adjacent[mask[idx_x][idx_y+1], mask[idx_x][idx_y]] = 1
+
+    # From the upper triangle of the matrix list out a unique set of
+    # edges for the pixels
+    edges = np.zeros((np.sum(adjacent) / 2, 2))
+    idx_edge = 0
+    for idx_x in range(0, adjacent.shape[0]):
+        for idx_y in range(idx_x, adjacent.shape[1]):
+            if adjacent[idx_x, idx_y]:
+                edges[idx_edge, 0] = idx_x
+                edges[idx_edge, 1] = idx_y
+                idx_edge += 1
+    return edges
+
+
 
