@@ -24,9 +24,9 @@ def log_pixelate_values(array, min_val, max_val, bins):
 	array.
 	"""
 	cuts = np.logspace(np.log(min_val), np.log(max_val), num=bins, base=np.e)
-	array_vals = np.array(array[:], dtype=int)
+	array_vals = np.array(array[:])
 	val = np.reshape(np.digitize(array_vals.flatten(), cuts), array.shape)
-	return val
+	return val.astype(int)
 
 def segment_image(image=None, no_segments=500):
 	"""
