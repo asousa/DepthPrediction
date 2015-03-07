@@ -5,16 +5,14 @@
 OUTDIR=train
 TOOLS=$CAFFE_HOME/build/tools
 
-TRAIN_DATA_ROOT=/home/vlf/Projects/DepthPrediction/train/NYUv2/train_full_227/
-VAL_DATA_ROOT=/home/vlf/Projects/DepthPrediction/train/NYUv2/test_full_227/
+TRAIN_DATA_ROOT=/home/vlf/Projects/DepthPrediction/train/NYUv2/train_full_167/
+VAL_DATA_ROOT=/home/vlf/Projects/DepthPrediction/train/NYUv2/test_full_167/
 
 
-# Set RESIZE=true to resize the images to 256x256. Leave as false if images have
-# already been resized using another tool.
-RESIZE=false
+RESIZE=true
 if $RESIZE; then
-  RESIZE_HEIGHT=256
-  RESIZE_WIDTH=256
+  RESIZE_HEIGHT=227
+  RESIZE_WIDTH=227
 else
   RESIZE_HEIGHT=0
   RESIZE_WIDTH=0
@@ -42,7 +40,7 @@ GLOG_logtostderr=1 $TOOLS/convert_imageset \
     --shuffle \
     $TRAIN_DATA_ROOT \
     $TRAIN_DATA_ROOT/index.txt \
-    ~/NYUv2_train_full_227_lmdb
+    ~/NYUv2_train_full_167_resize_lmdb
 
 echo "Creating val lmdb..."
 
@@ -52,6 +50,6 @@ GLOG_logtostderr=1 $TOOLS/convert_imageset \
     --shuffle \
     $VAL_DATA_ROOT \
     $VAL_DATA_ROOT/index.txt \
-    ~/NYUv2_test_full_227_lmdb
+    ~/NYUv2_test_full_167_resize_lmdb
 
 echo "Done."
