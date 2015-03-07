@@ -174,14 +174,22 @@ def create_segments_dataset(
 			os.makedirs(image_output_filepath)
 		out_log = open(image_output_filepath + '/index.txt','w+')
 
-	output_file = h5py.File(output_filename, 'w')
-	image_segments = output_file.create_dataset("data",
-		(no_segments, image_set.shape[1], 2 * x_window_size + 1, 2 * y_window_size + 1),
-		chunks=(1, image_set.shape[1], 2 * x_window_size + 1, 2 * y_window_size + 1))
+	# Check if exporting an hdf5 file
+	hdf5_output = (output_filename is not None)
+	if hdf5_output:
+		output_file = h5py.File(output_filename, 'w')
+		image_segments = output_file.create_dataset("data",
+			(no_segments, image_set.shape[1], 2 * x_window_size + 1, 2 * y_window_size + 1),
+			chunks=(1, image_set.shape[1], 2 * x_window_size + 1, 2 * y_window_size + 1))
 
-	segment_depths = output_file.create_dataset("label", (no_segments, 1), chunks=True)
-	segment_image_index = output_file.create_dataset("image", (no_segments, 1), chunks=True)
-	segment_superpixel_index = output_file.create_dataset("pixel", (no_segments, 1), chunks=True)
+
+		segment_depths = output_file.create_dataset("label", (no_segments, 1), chunks=True)
+		segment_image_index = output_file.create_dataset("image", (no_segments, 1), chunks=True)
+		segment_superpixel_index = output_file.create_dataset("pixel", (no_segments, 1), chunks=True)
+	else:
+		segment_image_index = []
+		segment_superpixel_index = []
+		image_segments = []
 
 	current_segment = 0
 	for image_idx in images:
@@ -193,11 +201,13 @@ def create_segments_dataset(
 		# Resize the arrays if they ended up being too small.
 		# Will probably only be called on the last image if at all.
 		end_index = current_segment+centroids.shape[1]
-		if end_index >= image_segments.shape[0]:
-			image_segments.resize((end_index + 1,) + image_segments.shape[1:])
-			segment_depths.resize((end_index + 1,) + segment_depths.shape[1:])
-			segment_image_index.resize((end_index + 1,) + segment_image_index.shape[1:])
-			segment_superpixel_index.resize((end_index + 1,) + segment_superpixel_index.shape[1:])
+
+		if (hdf5_output):
+			if end_index >= image_segments.shape[0]:
+				image_segments.resize((end_index + 1,) + image_segments.shape[1:])
+				segment_depths.resize((end_index + 1,) + segment_depths.shape[1:])
+				segment_image_index.resize((end_index + 1,) + segment_image_index.shape[1:])
+				segment_superpixel_index.resize((end_index + 1,) + segment_superpixel_index.shape[1:])
 
 		# Pull out sections around the centroid of the superpixel
 		image_segments[current_segment:end_index, ...] = \
@@ -243,4 +253,87 @@ def create_segments_dataset(
 		segment_superpixel_index.resize((current_segment,) + segment_superpixel_index.shape[1:])
 
  	return output_file
+
+def create_segments_directory(
+	input_filename=None,
+	image_output_filepath=None,
+	no_superpixels=200,
+	x_window_size=10,
+	y_window_size=10,
+	images=None,
+	depth_bins=None, depth_min = None, depth_max=None):
+	"""
+	outputs a directory of image segments, with index file.
+	"""
+
+	# Select which images to work with
+	if images == None:
+		images = range(0, image_set.shape[0])
+	if type(images) is not tuple:
+		images = range(0, images)
+	
+	[image_set, depths] = load_dataset(input_filename)
+	no_segments = no_superpixels * len(images)
+
+	# Create output directory
+	if not os.path.exists(image_output_filepath):
+		os.makedirs(image_output_filepath)
+	out_log = open(image_output_filepath + '/index.txt','a')
+
+	image_segments = np.ndarray([no_segments,3,2*x_window_size+1, 2*y_window_size+1])
+	segment_depths = np.ndarray(no_segments)
+	current_segment = 0
+	for image_idx in images:
+
+		print 'processing image', image_idx
+
+		image = np.array(image_set[image_idx, ...])
+		mask = segment_image(image, no_segments=no_superpixels)
+		centroids = calculate_sp_centroids(mask)
+		center_pixels = np.array(centroids, dtype=int)
+
+
+		end_index = current_segment+centroids.shape[1]
+
+		# Resize the arrays if they ended up being too small.
+		# Will probably only be called on the last image if at all.
+		
+		# Pull out sections around the centroid of the superpixel
+		image_segments[current_segment:end_index, ...] = \
+				gather_regions(image, centroids,
+						x_window_size=x_window_size,
+						y_window_size=y_window_size)
+
+	    # Pull out the appropriate depth images.
+ 		for depth_idx in range(0, centroids.shape[1]):
+ 			segment_depths[current_segment + depth_idx] = \
+ 					depths[image_idx,
+ 					       center_pixels[0, depth_idx],
+ 						   center_pixels[1, depth_idx]]
+
+ 		# Convert depths to quantized logspace:
+ 		if (depth_bins is not None):
+ 			#print 'quantizing depths'
+ 			segment_depths[current_segment:current_segment+centroids.shape[1]] = \
+ 			log_pixelate_values(segment_depths[current_segment:current_segment+centroids.shape[1]],
+ 				depth_bins, depth_min, depth_max)
+
+ 		#print image_segments[current_segment:end_index, ...].shape
+ 		#print end_index-current_segment
+		for i in range(current_segment,end_index):
+			#name = image_output_filepath + '/' + str(image_idx) + '_' + str(i-current_segment) + '.jpg'
+			name = str(image_idx) + '_' + str(i-current_segment) + '.jpg'
+
+			# write image
+			#print image_segments[i, ...].shape
+			#plt.imshow(image_segments[i, ...])
+			scipy.misc.imsave(image_output_filepath + '/' + name,np.transpose(image_segments[i, ...],(0,2,1)))
+			# append to log
+			#print segment_depths[i]
+			out_log.write(name + ' ' + str(int(segment_depths[i])) + '\n')
+
+
+ 		current_segment = current_segment + centroids.shape[1]
+
+
 
