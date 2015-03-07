@@ -111,6 +111,7 @@ def gather_regions(image=None, centroids=None, x_window_size=10, y_window_size=1
 def load_dataset_segments(
 	filename=None,
 	no_superpixels=500,
+	images=None,
 	x_window_size=10,
 	y_window_size=10):
 	"""
@@ -129,11 +130,14 @@ def load_dataset_segments(
 								 image_set.shape[1],
 								 2 * x_window_size + 1,
 								 2 * y_window_size + 1))
+	masks = np.zeros((len(images), depths.shape[1], depths.shape[2]))
 
+	current_image = 0
 	current_segment = 0
 	for image_idx in images:
 		image = np.array(image_set[image_idx, ...])
 		mask = segment_image(image, no_segments=no_superpixels)
+		masks[current_image, ...] = mask
 		centroids = calculate_sp_centroids(mask)
 		center_pixels = np.array(centroids, dtype=int)
 
@@ -149,8 +153,9 @@ def load_dataset_segments(
 			segment_depths[current_segment + depth_idx] = \
 				depths[image_idx, center_pixels[0, depth_idx], center_pixels[1 , depth_idx]]
 		current_segment = current_segment + centroids.shape[1]
+		current_image = current_image + 1
 
-	return image_segments[0:current_segment, ...], segment_depths[0:current_segment, ...]
+	return image_segments[0:current_segment, ...], segment_depths[0:current_segment, ...], masks
 
 
 
@@ -254,4 +259,11 @@ def create_segments_dataset(
 		segment_image_index.resize((current_segment,) + segment_image_index.shape[1:])
 		segment_superpixel_index.resize((current_segment,) + segment_superpixel_index.shape[1:])
 	return output_file
+
+
+def apply_depths(segment_depths, mask):
+	depth_image = np.zeros(mask.shape, dtype=segment_depths.dtype)
+	for depth_index in range(0, len(segment_depths)):
+		depth_image += segment_depths[depth_index] * (mask == depth_index)
+	return depth_image
 
