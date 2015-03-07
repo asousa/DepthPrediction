@@ -10,9 +10,7 @@ def load_dataset(filename=None):
 	""" 
 	Load in the hdf5 dataset from the specified filename with the labels
 	'images' and 'depths'.  Return these two hdf5 objects as a tuple.
-
 	"""
-
 	nyu_set = h5py.File(filename, 'r')
 	images = nyu_set['images']
 	depths = nyu_set['depths']
@@ -26,9 +24,9 @@ def log_pixelate_values(array, min_val, max_val, bins):
 	array.
 	"""
 	cuts = np.logspace(np.log(min_val), np.log(max_val), num=bins, base=np.e)
-	array_vals = np.array(array[:],dtype=int)
+	array_vals = np.array(array[:])
 	val = np.reshape(np.digitize(array_vals.flatten(), cuts), array.shape)
-	return val
+	return val.astype(int)
 
 def segment_image(image=None, no_segments=500):
 	"""
@@ -39,7 +37,6 @@ def segment_image(image=None, no_segments=500):
 		raise ValueError('Dimension of image is not 3')
 	if image.shape[0] != 3:
 		raise ValueError('First dimension of image is not 3')
-
 	mask = slic(np.transpose(image, (1, 2, 0)), n_segments=no_segments, compactness=15, sigma=1)
 	return mask
 
@@ -49,6 +46,21 @@ def calculate_sp_centroids(mask=None):
 	2 x n array with x in (0, :) and y in (1, :)
 	"""
 	pixel_ids = np.unique(mask)
+
+	# Thought I could vectorize this an make it faster... nope
+	#
+	# pixel_com = np.tile(pixel_ids, [mask.shape[0], mask.shape[1], 1])
+	# mask_com = np.tile(mask, [len(pixel_ids), 1, 1]).transpose(1, 2, 0)
+	# com_mat = mask_com == pixel_com
+
+	# pixel_counts = com_mat.sum(axis=(0,1))
+
+	# weight_x = np.tile(range(0, mask.shape[0]), [len(pixel_ids), 1]).transpose()
+	# weight_y = np.tile(range(0, mask.shape[1]), [len(pixel_ids), 1]).transpose()
+
+	# centroids = np.vstack(((com_mat.sum(axis=1) * weight_x).sum(0) / pixel_counts, 
+	# 	                   (com_mat.sum(axis=0) * weight_y).sum(0) / pixel_counts))
+
 	centroids = np.zeros((2, len(pixel_ids)))
 	weight_x = np.array(range(0, mask.shape[0]))
 	weight_y = np.array(range(0, mask.shape[1]))
@@ -99,6 +111,7 @@ def gather_regions(image=None, centroids=None, x_window_size=10, y_window_size=1
 def load_dataset_segments(
 	filename=None,
 	no_superpixels=500,
+	images=None,
 	x_window_size=10,
 	y_window_size=10):
 	"""
@@ -117,11 +130,14 @@ def load_dataset_segments(
 								 image_set.shape[1],
 								 2 * x_window_size + 1,
 								 2 * y_window_size + 1))
+	masks = np.zeros((len(images), depths.shape[1], depths.shape[2]))
 
+	current_image = 0
 	current_segment = 0
 	for image_idx in images:
 		image = np.array(image_set[image_idx, ...])
 		mask = segment_image(image, no_segments=no_superpixels)
+		masks[current_image, ...] = mask
 		centroids = calculate_sp_centroids(mask)
 		center_pixels = np.array(centroids, dtype=int)
 
@@ -133,12 +149,13 @@ def load_dataset_segments(
 
 		image_segments[current_segment:(current_segment+centroids.shape[1]), ...] = \
 			gather_regions(image, centroids, x_window_size=x_window_size, y_window_size=y_window_size)
- 		for depth_idx in range(0, centroids.shape[1]):
- 			segment_depths[current_segment + depth_idx] = \
- 				depths[image_idx, center_pixels[0, depth_idx], center_pixels[1 , depth_idx]]
- 		current_segment = current_segment + centroids.shape[1]
+		for depth_idx in range(0, centroids.shape[1]):
+			segment_depths[current_segment + depth_idx] = \
+				depths[image_idx, center_pixels[0, depth_idx], center_pixels[1 , depth_idx]]
+		current_segment = current_segment + centroids.shape[1]
+		current_image = current_image + 1
 
- 	return image_segments[0:current_segment, ...], segment_depths[0:current_segment, ...]
+	return image_segments[0:current_segment, ...], segment_depths[0:current_segment, ...], masks
 
 
 
@@ -215,12 +232,12 @@ def create_segments_dataset(
 						x_window_size=x_window_size,
 						y_window_size=y_window_size)
 
-	    # Pull out the appropriate depth images.
- 		for depth_idx in range(0, centroids.shape[1]):
- 			segment_depths[current_segment + depth_idx] = \
- 					depths[image_idx,
- 					       center_pixels[0, depth_idx],
- 						   center_pixels[1, depth_idx]]
+		# Pull out the appropriate depth images.
+		for depth_idx in range(0, centroids.shape[1]):
+			segment_depths[current_segment + depth_idx] = \
+					depths[image_idx,
+					       center_pixels[0, depth_idx],
+						   center_pixels[1, depth_idx]]
 
  		# Convert depths to quantized logspace:
  		if (depth_bins is not None):
@@ -243,16 +260,22 @@ def create_segments_dataset(
 				out_log.write(name + ' ' + str(int(segment_depths[i][0])) + '\n')
 
 
- 		current_segment = current_segment + centroids.shape[1]
- 	# If the number of superpixels was smaller than we expected, resize the
- 	# arrays before returning them
- 	if current_segment != image_segments.shape[0]:
+		current_segment = current_segment + centroids.shape[1]
+	# If the number of superpixels was smaller than we expected, resize the
+	# arrays before returning them
+	if current_segment != image_segments.shape[0]:
 		image_segments.resize((current_segment,) + image_segments.shape[1:])
 		segment_depths.resize((current_segment,)  + segment_depths.shape[1:])
 		segment_image_index.resize((current_segment,) + segment_image_index.shape[1:])
 		segment_superpixel_index.resize((current_segment,) + segment_superpixel_index.shape[1:])
+	return output_file
 
- 	return output_file
+
+def apply_depths(segment_depths, mask):
+	depth_image = np.zeros(mask.shape, dtype=segment_depths.dtype)
+	for depth_index in range(0, len(segment_depths)):
+		depth_image += segment_depths[depth_index] * (mask == depth_index)
+	return depth_image
 
 def create_segments_directory(
 	input_filename=None,
