@@ -1,12 +1,11 @@
 import numpy as np
 import caffe
-from unaryRegressor import Regressor
 
 class DepthPredictor():
    def __init__(self):
       self.unaryCNN=None
 
-   def load(self,model_file=None,pretrained_file=None, meanfile=None, image_dims=(256,256)):
+   def load(self,model_file=None,pretrained_file=None, meanfile=None, image_dims=(227,227)):
       """ Load pretrained classifiers
             model_file = model descripton file (*.prototxt)
             pretrained_file = pretrained weights (*.caffemodel)
@@ -33,7 +32,7 @@ class DepthPredictor():
       """ Predict a depth field (OK, currently just classifying images) """
       #return self.unaryCNN.predict(images)
       # Scale to standardize input dimensions.
-      oversample = True
+      oversample = False   # Flip it, shift it, crop it, etc
       
       input_ = np.zeros((len(inputs),
          self.unaryCNN.image_dims[0], self.unaryCNN.image_dims[1], inputs[0].shape[2]),

@@ -2,12 +2,14 @@
 # Create the imagenet lmdb inputs
 # N.B. set the path to the imagenet train + val data dirs
 
-OUTDIR=train
+OUTDIR=~/Projects/DepthPrediction/train
 TOOLS=$CAFFE_HOME/build/tools
 
-TRAIN_DATA_ROOT=/home/vlf/Projects/DepthPrediction/train/NYUv2/train_full_167/
-VAL_DATA_ROOT=/home/vlf/Projects/DepthPrediction/train/NYUv2/test_full_167/
+TRAIN_DATA_ROOT=/home/vlf/Projects/DepthPrediction/train/NYUv2/train_full_167_v2/
+VAL_DATA_ROOT=/home/vlf/Projects/DepthPrediction/train/NYUv2/test_full_167_v2/
 
+IND_NAME=index_128.txt
+OUT_NAME=full_167_resize_d128_lmdb
 
 RESIZE=true
 if $RESIZE; then
@@ -39,8 +41,8 @@ GLOG_logtostderr=1 $TOOLS/convert_imageset \
     --resize_width=$RESIZE_WIDTH \
     --shuffle \
     $TRAIN_DATA_ROOT \
-    $TRAIN_DATA_ROOT/index.txt \
-    ~/NYUv2_train_full_167_resize_lmdb
+    $TRAIN_DATA_ROOT/$IND_NAME \
+    $OUTDIR/NYUv2_train_$OUT_NAME
 
 echo "Creating val lmdb..."
 
@@ -49,7 +51,7 @@ GLOG_logtostderr=1 $TOOLS/convert_imageset \
     --resize_width=$RESIZE_WIDTH \
     --shuffle \
     $VAL_DATA_ROOT \
-    $VAL_DATA_ROOT/index.txt \
-    ~/NYUv2_test_full_167_resize_lmdb
+    $VAL_DATA_ROOT/$IND_NAME \
+    $OUTDIR/NYUv2_test_$OUT_NAME
 
 echo "Done."

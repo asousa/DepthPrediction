@@ -1,4 +1,5 @@
-name: "Unary depth regressor"
+# Pretrained via softmax classifier; now stepping forward to Euclidean
+name: "Unary depth regressor, euclidean version"
 
 # use this style for running mode
 #input: "data"
@@ -15,10 +16,11 @@ layers {
   transform_param {
     #mirror: true
     #crop_size: 227
+    # (Mean file is same for d16 and d128)
     mean_file: "train/NYUv2/NYUv2_train_mean_full_167_resize_d16.binaryproto"
   }
   data_param {
-    source: "train/NYUv2/NYUv2_train_full_167_resize_d16_lmdb"
+    source: "train/NYUv2/NYUv2_train_full_167_resize_d128_lmdb"
     backend: LMDB
     batch_size: 256
   }
@@ -36,7 +38,7 @@ layers {
     mean_file: "train/NYUv2/NYUv2_test_mean_full_167_resize_d16.binaryproto"
   }
   data_param {
-    source: "train/NYUv2/NYUv2_test_full_167_resize_d16_lmdb"
+    source: "train/NYUv2/NYUv2_test_full_167_resize_d128_lmdb"
     batch_size: 256 
     backend: LMDB
   }
@@ -335,47 +337,47 @@ layers {
   blobs_lr: 1
   blobs_lr: 1
 }
-layers {
-  name: "prob"
-  type: SOFTMAX_LOSS
-  bottom: "fc_n2"
-  bottom: "label"
-  top: "prob"
-}
-
-layers {
-  name: "accuracy"
-  type: ACCURACY
-  bottom: "fc_n2"
-  bottom: "label"
-  top: "accuracy"
-  include: { phase: TEST }
-}
-
-
-## EUCLIDEAN LOSS LAYER / FOR REGRESSION
 #layers {
 #  name: "prob"
-#  type: SOFTMAX
+#  type: SOFTMAX_LOSS
 #  bottom: "fc_n2"
-#  top: "fc_n3"
-#}
-#
-#
-#layers {
-#  name: "output_neuron"
-#  type: INNER_PRODUCT
-#  bottom: "fc_n3"
-#  top: "output_neuron"
-#  inner_product_param {
-#    num_output: 1
-#  }
-#}
-#layers {
-#  name: "loss"
-#  type: EUCLIDEAN_LOSS
-#  bottom: "output_neuron"
 #  bottom: "label"
+#  top: "prob"
 #}
+#
+#layers {
+#  name: "accuracy"
+#  type: ACCURACY
+#  bottom: "fc_n2"
+#  bottom: "label"
+#  top: "accuracy"
+#  include: { phase: TEST }
+#}
+
+
+# EUCLIDEAN LOSS LAYER / FOR REGRESSION
+layers {
+  name: "prob"
+  type: SOFTMAX
+  bottom: "fc_n2"
+  top: "fc_n3"
+}
+
+
+layers {
+  name: "output_neuron"
+  type: INNER_PRODUCT
+  bottom: "fc_n3"
+  top: "output_neuron"
+  inner_product_param {
+    num_output: 1
+  }
+}
+layers {
+  name: "loss"
+  type: EUCLIDEAN_LOSS
+  bottom: "output_neuron"
+  bottom: "label"
+}
 
 

@@ -23,10 +23,13 @@ def log_pixelate_values(array, min_val, max_val, bins):
 	spaced from the min to the max value. This should work on any dimension of
 	array.
 	"""
-	cuts = np.logspace(np.log(min_val), np.log(max_val), num=bins, base=np.e)
+	print bins
+	cuts = np.logspace(np.log(min_val), np.log(max_val), num=(bins+1), base=np.e)
+	print cuts.shape
 	array_vals = np.array(array[:])
 	val = np.reshape(np.digitize(array_vals.flatten(), cuts), array.shape)
 	return val.astype(int)
+
 
 def segment_image(image=None, no_segments=500):
 	"""
@@ -284,11 +287,12 @@ def create_segments_directory(
 	x_window_size=10,
 	y_window_size=10,
 	images=None,
-	depth_bins=None, depth_min = None, depth_max=None):
+	depth_bins=None, depth_min = None, depth_max=None,
+	output_images=True, index_name='index.txt'):
 	"""
 	outputs a directory of image segments, with index file.
 	"""
-
+	#print 'loop depth_bins = ', depth_bins
 	# Select which images to work with
 	if images == None:
 		images = range(0, image_set.shape[0])
@@ -301,7 +305,7 @@ def create_segments_directory(
 	# Create output directory
 	if not os.path.exists(image_output_filepath):
 		os.makedirs(image_output_filepath)
-	out_log = open(image_output_filepath + '/index.txt','a')
+	out_log = open(image_output_filepath + '/' + index_name,'a')
 
 	image_segments = np.ndarray([no_segments,3,2*x_window_size+1, 2*y_window_size+1])
 	segment_depths = np.ndarray(no_segments)
@@ -320,12 +324,12 @@ def create_segments_directory(
 
 		# Resize the arrays if they ended up being too small.
 		# Will probably only be called on the last image if at all.
-		
-		# Pull out sections around the centroid of the superpixel
-		image_segments[current_segment:end_index, ...] = \
-				gather_regions(image, centroids,
-						x_window_size=x_window_size,
-						y_window_size=y_window_size)
+		if (output_images):
+			# Pull out sections around the centroid of the superpixel
+			image_segments[current_segment:end_index, ...] = \
+					gather_regions(image, centroids,
+							x_window_size=x_window_size,
+							y_window_size=y_window_size)
 
 	    # Pull out the appropriate depth images.
  		for depth_idx in range(0, centroids.shape[1]):
@@ -334,12 +338,11 @@ def create_segments_directory(
  					       center_pixels[0, depth_idx],
  						   center_pixels[1, depth_idx]]
 
- 		# Convert depths to quantized logspace:
- 		if (depth_bins is not None):
- 			#print 'quantizing depths'
- 			segment_depths[current_segment:current_segment+centroids.shape[1]] = \
- 			log_pixelate_values(segment_depths[current_segment:current_segment+centroids.shape[1]],
- 				depth_bins, depth_min, depth_max)
+		# Convert depths to quantized logspace:
+		#print 'quantizing depths'
+		segment_depths[current_segment:current_segment+centroids.shape[1]] = \
+		log_pixelate_values(segment_depths[current_segment:current_segment+centroids.shape[1]],
+			bins=depth_bins, min_val=depth_min, max_val=depth_max)
 
  		#print image_segments[current_segment:end_index, ...].shape
  		#print end_index-current_segment
@@ -350,9 +353,9 @@ def create_segments_directory(
 			# write image
 			#print image_segments[i, ...].shape
 			#plt.imshow(image_segments[i, ...])
-			scipy.misc.imsave(image_output_filepath + '/' + name,np.transpose(image_segments[i, ...],(0,2,1)))
-			# append to log
-			#print segment_depths[i]
+			if output_images:
+				scipy.misc.imsave(image_output_filepath + '/' + name,np.transpose(image_segments[i, ...],(0,2,1)))
+
 			out_log.write(name + ' ' + str(int(segment_depths[i])) + '\n')
 
 

@@ -21,20 +21,25 @@ from image_handling import create_segments_directory
 
 min_depth = 0.7;
 max_depth = 10;
-depth_bins = 16;
+depth_bins = 128;
 
 window_size = 83; # 167x167~NYUv2 paper # 227x227, imagenet standard
 n_superpixels = 200;
 
+output_images=False
+
 # Generate training set
 
+# matlab file
 input_file = 'train/nyu_depth_v2_labeled.mat'
-img_filepath_train = '/home/vlf/Projects/DepthPrediction/train/NYUv2/train_full_167'
-img_filepath_test = '/home/vlf/Projects/DepthPrediction/train/NYUv2/test_full_167'
+# Directory of images
+img_filepath_train = '/home/vlf/Projects/DepthPrediction/train/NYUv2/train_full_167_v2'
+img_filepath_test = '/home/vlf/Projects/DepthPrediction/train/NYUv2/test_full_167_v2'
 
 train_slices = np.array_split(train_inds - 1,10)
 test_slices = np.array_split(test_inds - 1, 10)
 
+## THESE LINES FOR BUILDING A FRESH SET
 # print 'Building training set...'
 # for s in train_slices:
 #    images = tuple(s)
@@ -42,11 +47,24 @@ test_slices = np.array_split(test_inds - 1, 10)
 #                    no_superpixels=n_superpixels, x_window_size=window_size, y_window_size=window_size, images=images,
 #                    depth_bins=depth_bins,depth_min=min_depth, depth_max=max_depth)
 
+# print 'Building validation set...'
+# for s in test_slices:
+#     images = tuple(s)
+#     data_file = create_segments_directory(input_filename=input_file, image_output_filepath=img_filepath_test,
+#                     no_superpixels=n_superpixels, x_window_size=113, y_window_size=113, images=images,
+#                     depth_bins=depth_bins,depth_min=min_depth, depth_max=max_depth)
+
+# print 'Building training set...'
+for s in train_slices:
+   images = tuple(s)
+   data_file = create_segments_directory(input_filename=input_file, image_output_filepath=img_filepath_train,
+                   no_superpixels=n_superpixels, x_window_size=window_size, y_window_size=window_size, images=images,
+                   depth_bins=depth_bins,depth_min=min_depth, depth_max=max_depth, output_images=output_images,index_name='index_' + str(depth_bins) +'.txt')
 print 'Building validation set...'
-for s in test_slices:
-    images = tuple(s)
-    data_file = create_segments_directory(input_filename=input_file, image_output_filepath=img_filepath_test,
-                    no_superpixels=n_superpixels, x_window_size=113, y_window_size=113, images=images,
-                    depth_bins=depth_bins,depth_min=min_depth, depth_max=max_depth)
+#for s in test_slices:
+#    images = tuple(s)
+#    data_file = create_segments_directory(input_filename=input_file, image_output_filepath=img_filepath_test,
+#                    no_superpixels=n_superpixels, x_window_size=window_size, y_window_size=window_size, images=images,
+#                    depth_bins=depth_bins,depth_min=min_depth, depth_max=max_depth, output_images=output_images, index_name='index_' + str(depth_bins) + '.txt')
 
     
