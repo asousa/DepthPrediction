@@ -72,15 +72,18 @@ def calculate_sp_centroids(mask=None):
 
 	return centroids
 
-def gather_regions(image=None, centroids=None, x_window_size=10, y_window_size=10):
+def gather_regions(image=None, centroids=None, x_window_size=10, y_window_size=10, zero_pad=True):
 	"""
 	Generate an np.ndarray containing a box around all of the superpixels
 	within the image.  The box is 1 + 2 * window_size in the x and y
-	directions.  Images whos boxes would hang over the edge of the image are
-	moved up to the boundary edge, so that the centroid sits off-center closer
-	to the edge of the image.
+	directions.  If zero_pad is True (default), the images whos boxes overhang
+	the edges of the image are zero padded.  If zero_pad is False, images whos
+	boxes would hang over the edge of the image are moved up to the boundary
+	edge, so that the centroid sits off-center closer to the edge of the image.
 	"""
-	regions = np.zeros((centroids.shape[1], 3, 2 * x_window_size + 1,  2 * y_window_size + 1))
+	x_width = 2 * x_window_size + 1
+	y_width = 2 * y_window_size + 1
+	regions = np.zeros((centroids.shape[1], 3, x_width,  y_width))
 	center_pixels = np.array(centroids, dtype=int)
 	for pixel in range(0, center_pixels.shape[1]):
 		x = center_pixels[0, pixel]
@@ -90,21 +93,48 @@ def gather_regions(image=None, centroids=None, x_window_size=10, y_window_size=1
 		y_left = y - y_window_size - 1
 		y_right = y + y_window_size
 
-		if x_left < 0:
-			x_left = 0
-			x_right = 2 * x_window_size + 1
-		elif x_right >= image.shape[1]:
-			x_left = image.shape[1] - 2 * x_window_size - 2
-			x_right = image.shape[1] - 1
+		if zero_pad:
+			# Pull out the region from the image, but make sure it doesn't
+			# extend beyond the boundaries of the image.
+			image_region = image[:, max(x_left,0):min(x_right, image.shape[1]-1),
+								    max(y_left,0):min(y_right, image.shape[2]-1)]
 
-		if y_left < 0:
-			y_left = 0
-			y_right = 2 * y_window_size + 1
-		elif y_right >= image.shape[2]:
-			y_left = image.shape[2] - 2 * y_window_size - 2
-			y_right = image.shape[2] - 1
+			# Fill in with zeros on the appropriate side if necessary.
+			# Deal with the x size first and then handle any adjustments
+			# necessary in y
+			if x_left < 0:
+				image_region = np.concatenate((np.zeros((image_region.shape[0], x_width - image_region.shape[1], image_region.shape[2])), image_region), axis=1)
+			elif x_right >= image.shape[1]:
+				image_region = np.concatenate((image_region, np.zeros((image_region.shape[0], x_width - image_region.shape[1], image_region.shape[2]))), axis=1)
 
-		regions[pixel, ...] = image[:, x_left:x_right, y_left:y_right]
+			if y_left < 0:
+				image_region = np.concatenate((np.zeros((image_region.shape[0], image_region.shape[1], y_width - image_region.shape[2])), image_region), axis=2)
+			elif y_right >= image.shape[2]:
+				image_region = np.concatenate((image_region, np.zeros((image_region.shape[0], image_region.shape[1], y_width - image_region.shape[2]))), axis=2)
+			# Save into our return array
+			regions[pixel, ...] = image_region
+
+		else:
+			# Old Shifting implementation
+			if x_left < 0:
+				x_left = 0
+				x_right = 2 * x_window_size + 1
+				x_left_hit = True
+			elif x_right >= image.shape[1]:
+				x_left = image.shape[1] - 2 * x_window_size - 2
+				x_right = image.shape[1] - 1
+				x_right_hit = True
+
+			if y_left < 0:
+				y_left = 0
+				y_right = 2 * y_window_size + 1
+				y_left_hit = True
+			elif y_right >= image.shape[2]:
+				y_left = image.shape[2] - 2 * y_window_size - 2
+				y_right = image.shape[2] - 1
+				y_right_hit = True
+
+			regions[pixel, ...] = image[:, x_left:x_right, y_left:y_right]
 	
 	return regions
 
