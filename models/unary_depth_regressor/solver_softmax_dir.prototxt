@@ -1,7 +1,7 @@
-net: "models/unary_depth_regressor/udr_euclidean_lmdb.prototxt"
+net: "models/unary_depth_regressor/udr_softmax_dir.prototxt"
 test_iter: 100 # Test set: 125,569 images (~490x256 batches)
-test_interval:10000
-# solver_type: ADAGRAD # Sure, let's try this!
+test_interval:1000
+solver_type: ADAGRAD # Sure, let's try this!
 # lr for fine-tuning should be lower than when starting from scratch
 base_lr: 0.0001  
 lr_policy: "step"
@@ -10,9 +10,9 @@ gamma: 0.4
 stepsize: 12000 # Interval between learning_rate drops
 display: 20
 max_iter: 40000
-momentum: 0.9
+#momentum: 0.9
 weight_decay: 0.0005
 snapshot: 1000
-snapshot_prefix: "models/unary_depth_regressor/snapshots_euclidean/udr_euclidean_d128_slowlearn_snapshot"
+snapshot_prefix: "models/unary_depth_regressor/snapshots_euclidean/udr_softmax_dir_16_norm_adagrad"
 # uncomment the following to default to CPU mode solving
 # solver_mode: CPU

@@ -1,5 +1,5 @@
 # Pretrained via softmax classifier; now stepping forward to Euclidean
-name: "Unary depth regressor, euclidean version"
+name: "Unary depth regressor, softmax version: directory input"
 
 # use this style for running mode
 #input: "data"
@@ -59,7 +59,8 @@ layers {
   image_data_param {
     new_width: 227
     new_height: 227
-    source: "train/NYUv2/train_full_167_v2/index_16_fullpath.txt"
+    shuffle: 1
+    source: "train/NYUv2/train_full_167_v2/index_16_norm.txt"
     batch_size: 128
   }
   include: { phase: TRAIN }
@@ -76,7 +77,8 @@ layers {
   image_data_param {
     new_width: 227
     new_height: 227
-    source: "train/NYUv2/test_full_167_v2/index_16_fullpath.txt"
+    shuffle: 1
+    source: "train/NYUv2/test_full_167_v2/index_16_norm.txt"
     batch_size: 128 
   }
   include: { phase: TEST }
@@ -317,7 +319,7 @@ layers {
   }
 
   blobs_lr: 1
-  blobs_lr: 0.1
+  blobs_lr: 0.5
 }
 layers {
   name: "relu7"
@@ -352,7 +354,7 @@ layers {
     }
   }
   blobs_lr: 1
-  blobs_lr: 0.1
+  blobs_lr: 0.5
 }
 layers {
   name: "relu_n1"
@@ -388,24 +390,24 @@ layers {
     }
   }
   blobs_lr: 1
-  blobs_lr: 0.1
+  blobs_lr: 0.5
 }
-#layers {
-#  name: "prob"
-#  type: SOFTMAX_LOSS
-#  bottom: "fc_n2"
-#  bottom: "label"
-#  top: "prob"
-#}
-#
-#layers {
-#  name: "accuracy"
-#  type: ACCURACY
-#  bottom: "fc_n2"
-#  bottom: "label"
-#  top: "accuracy"
-#  include: { phase: TEST }
-#}
+layers {
+  name: "prob"
+  type: SOFTMAX_LOSS
+  bottom: "fc_n2"
+  bottom: "label"
+  top: "prob"
+}
+
+layers {
+  name: "accuracy"
+  type: ACCURACY
+  bottom: "fc_n2"
+  bottom: "label"
+  top: "accuracy"
+  include: { phase: TEST }
+}
 
 
 # Pre-sum Nonlinearity
@@ -425,30 +427,30 @@ layers {
 #  }
 #}
 
-layers {
-  name: "prob"
-  type: SOFTMAX
-  bottom: "fc_n2"
-  top: "fc_n3"
-}
-
-
-layers {
-  name: "output_neuron"
-  type: INNER_PRODUCT
-  bottom: "fc_n3"
-  #bottom: "fc_n2"
-
-  top: "output_neuron"
-  inner_product_param {
-    num_output: 1
-  }
-}
-layers {
-  name: "loss"
-  type: EUCLIDEAN_LOSS
-  bottom: "output_neuron"
-  bottom: "label"
-}
+#layers {
+#  name: "prob"
+#  type: SOFTMAX
+#  bottom: "fc_n2"
+#  top: "fc_n3"
+#}
+#
+#
+#layers {
+#  name: "output_neuron"
+#  type: INNER_PRODUCT
+#  bottom: "fc_n3"
+#  #bottom: "fc_n2"
+#
+#  top: "output_neuron"
+#  inner_product_param {
+#    num_output: 1
+#  }
+#}
+#layers {
+#  name: "loss"
+#  type: EUCLIDEAN_LOSS
+#  bottom: "output_neuron"
+#  bottom: "label"
+#}
 
 

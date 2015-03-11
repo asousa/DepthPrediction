@@ -395,5 +395,61 @@ def find_neighbors(mask):
                 idx_edge += 1
     return edges
 
+def preprocess_image(
+	image, true_depth=None,
+	no_superpixels=200,
+	x_window_size=10,
+	y_window_size=10,
+	depth_bins=None, depth_min = None, depth_max=None):
+	"""
+	Returns image segments, etc.
+	"""
+	#print 'loop depth_bins = ', depth_bins
+	# Select which images to work with
+	# if images == None:
+	# 	images = range(0, image_set.shape[0])
+	# if type(images) is not tuple:
+	# 	images = range(0, images)
+	
+	# [image_set, depths] = load_dataset(input_filename)
+	no_segments = no_superpixels  #* len(images)
+
+	
+	image_segments = np.ndarray([no_segments,3,2*x_window_size+1, 2*y_window_size+1])
+	segment_depths = np.ndarray(no_segments)
+	
+
+
+	#plt.imshow(image)
+	print image.shape
+	masks = segment_image(image, no_segments=no_superpixels)
+	centroids = calculate_sp_centroids(masks)
+	center_pixels = np.array(centroids, dtype=int)
+
+	# Pull out sections around the centroid of the superpixel
+	image_segments = \
+			gather_regions(image, centroids,
+					x_window_size=x_window_size,
+					y_window_size=y_window_size)
+
+	# # If provided depth maps, quantize and return those too
+	if true_depth is not None:
+	#     Pull out the appropriate depth images.
+		for depth_idx in range(0, centroids.shape[1]):
+			segment_depths[depth_idx] = \
+					true_depth[center_pixels[0, depth_idx],
+						   	   center_pixels[1, depth_idx]]
+
+	 	# Convert depths to quantized logspace:
+	 	#print 'quantizing depths'
+	 	segment_depths = log_pixelate_values(segment_depths,
+	 		bins=depth_bins, min_val=depth_min, max_val=depth_max)
+
+
+	if true_depth is not None:
+ 		return image_segments, masks, segment_depths
+ 	else:
+ 		return image_segments, masks
+
 
 
