@@ -47,20 +47,6 @@ def calculate_sp_centroids(mask=None):
 	"""
 	pixel_ids = np.unique(mask)
 
-	# Thought I could vectorize this an make it faster... nope
-	#
-	# pixel_com = np.tile(pixel_ids, [mask.shape[0], mask.shape[1], 1])
-	# mask_com = np.tile(mask, [len(pixel_ids), 1, 1]).transpose(1, 2, 0)
-	# com_mat = mask_com == pixel_com
-
-	# pixel_counts = com_mat.sum(axis=(0,1))
-
-	# weight_x = np.tile(range(0, mask.shape[0]), [len(pixel_ids), 1]).transpose()
-	# weight_y = np.tile(range(0, mask.shape[1]), [len(pixel_ids), 1]).transpose()
-
-	# centroids = np.vstack(((com_mat.sum(axis=1) * weight_x).sum(0) / pixel_counts, 
-	# 	                   (com_mat.sum(axis=0) * weight_y).sum(0) / pixel_counts))
-
 	centroids = np.zeros((2, len(pixel_ids)))
 	weight_x = np.array(range(0, mask.shape[0]))
 	weight_y = np.array(range(0, mask.shape[1]))
@@ -407,7 +393,7 @@ def create_segments_directory(
 	depth_type=0):
 	"""
 	outputs a directory of image segments, with index file.
-	
+
 	See gather_depths for depth_type behavior.
 	"""
 
@@ -521,3 +507,13 @@ def apply_depths(segment_depths, mask):
 	for depth_index in range(0, len(segment_depths)):
 		depth_image += segment_depths[depth_index] * (mask == depth_index)
 	return depth_image
+
+def hist_colors(image, color_bins=256, color_min=0, color_max=255):
+	color_hist = np.zeros((image.shape[0], color_bins))
+	color_flat = np.reshape(image, (image.shape[0], -1))
+	for color_idx in range(0, image.shape[0]):
+		color_hist[color_idx, :] = np.histogram(color_flat[color_idx, :],
+												color_bins,
+												(color_min, color_max))[0]
+	return color_hist
+
