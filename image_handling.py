@@ -2,6 +2,7 @@ import h5py
 import numpy as np
 from skimage.segmentation import slic
 from skimage.segmentation import mark_boundaries
+from skimage.feature import local_binary_pattern
 import os
 import scipy
 import matplotlib.pyplot as plt
@@ -498,6 +499,7 @@ def find_neighbors(mask):
                 idx_edge += 1
     return edges
 
+
 def apply_depths(segment_depths, mask):
 	"""
 	Given a list of depths and a superpixel mask, create a depth map that can
@@ -508,7 +510,24 @@ def apply_depths(segment_depths, mask):
 		depth_image += segment_depths[depth_index] * (mask == depth_index)
 	return depth_image
 
+
+def logistic_vector_dist(vector1, vector2, gamma=1):
+	"""
+	Take two vectors, take their L2 norm, and then logistically regress that
+	value to keep the result between 0 and 1.  gamma is a parameter that
+	controls the scaling between 0 and 1 (although 0 only reached
+	asymmtotically).
+	"""
+	if not np.all(vector1.shape == vector2.shape):
+		raise ValueError('Inputs are not the same shape.')
+	return np.exp(-gamma * np.linalg.norm(vector2.ravel() - vector1.ravel()))
+
+
 def hist_colors(image, color_bins=256, color_min=0, color_max=255):
+	"""
+	Generate histograms of the colors contained within an image, which
+	are assumed to be in the first axis.  Any number of colors are allowed.
+	"""
 	color_hist = np.zeros((image.shape[0], color_bins))
 	color_flat = np.reshape(image, (image.shape[0], -1))
 	for color_idx in range(0, image.shape[0]):
@@ -517,3 +536,46 @@ def hist_colors(image, color_bins=256, color_min=0, color_max=255):
 												(color_min, color_max))[0]
 	return color_hist
 
+
+def logistic_color_hist_diff(
+	image1, 
+	image2, 
+	color_bins=256, 
+	color_min=0, 
+	color_max=255, 
+	gamma=1e-4):
+	"""
+	Compare the logistically regressed distance between the color content of
+	two images by taking the histograms of the provided images, assuming the
+	color is placed in axis=0. gamma chosen purely hearuistically to provide
+	decent dynamic range as seen in image_handling_tb.ipynb, figure 14.
+	"""
+	return logistic_vector_dist(
+		hist_colors(image1, color_bins, color_min, color_max),
+		hist_colors(image2, color_bins, color_min, color_max),
+		gamma)
+
+
+def logistic_color_diff(image1, image2, gamma=4e-5):
+	"""
+	Generate a logistically regressed distance between two color images.
+	gamma chosen purely hearuistically to provide decent dynamic range
+	as seen in image_handling_tb.ipynb, figure 14.
+	"""
+	return logistic_vector_dist(image1, image2, gamma)
+
+
+def logistic_lbp_diff(image1, image2, gamma=1e-3, points=4, radius=2):
+	"""
+	Generate local binary patterns (LBP) for each of the images by taking the 
+	average across the color components (assumed to be axis = 0), and then
+	generating a LBP using a given number of points and comparing at a given
+	radius away from the center of the image.  The distance between the LBPs
+	is regressed.  gamma, points, and radius defaults chosen purely
+	hearuistically to provide decent dynamic range as seen in
+	image_handling_tb.ipynb, figure 14.
+	"""
+	return logistic_vector_dist(
+		local_binary_pattern(np.average(image1, axis=0), points, radius),
+		local_binary_pattern(np.average(image2, axis=0), points, radius),
+		gamma)
