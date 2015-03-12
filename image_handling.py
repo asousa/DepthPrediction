@@ -579,3 +579,37 @@ def logistic_lbp_diff(image1, image2, gamma=1e-3, points=4, radius=2):
 		local_binary_pattern(np.average(image1, axis=0), points, radius),
 		local_binary_pattern(np.average(image2, axis=0), points, radius),
 		gamma)
+
+
+def pairwise_distance_matrices(segments, edges=None, mask=None):
+	"""
+	Given a number of segments and the edges that connect them, or a mask from
+	which a set of edges that connect neighbors can be defined, this generates
+	a 3xlen(segments)xlen(segments) listing the distance between all of the
+	different segments.  The [i, j, k] value of the returned array represents
+	the ith type of distance metric between segments j and k.  If the segments
+	are not neighbors then the distance is left as zero.  The 3 distance
+	metrics are, 1, the logistic color difference, 2, the logistic color
+	histogram difference, and, 3, the local binary pattern difference.
+	"""
+	no_segments = len(segments)
+	distances = np.zeros((3, no_segments, no_segments))
+
+	if edges is None:
+		if mask is None:
+			raise ValueError('Neither edges nor mask provided')
+		else:
+			edges = find_neighbors(mask)
+
+	for edge in edges:
+	    distances[0, edge[0], edge[1]] = \
+	    	logistic_color_diff(segments[edge[0], ...],
+	    						segments[edge[1], ...])
+	    distances[1, edge[0], edge[1]] = \
+	    	logistic_color_hist_diff(segments[edge[0], ...],
+	    							 segments[edge[1], ...])
+	    distances[2, edge[0], edge[1]] = \
+	    	logistic_lbp_diff(segments[edge[0], ...],
+	    					  segments[edge[1], ...])
+
+	return distances
