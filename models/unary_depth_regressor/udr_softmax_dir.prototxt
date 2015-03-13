@@ -8,13 +8,13 @@ layers {
   top: "label"
   transform_param {
     # (Mean file is same for d16 and d128)
-    mean_file: "train/NYUv2/NYUv2_train_mean_full_167_resize_d16.binaryproto"
+    mean_file: "train/NYUv2/train_full_167_v3/mean.binaryproto"
   } 
   image_data_param {
     new_width: 227
     new_height: 227
     shuffle: 1
-    source: "train/NYUv2/train_full_167_v3/index_16_norm_randomized.txt"
+    source: "train/NYUv2/train_full_167_v3/index_16_1_norm_randomized.txt"
     batch_size: 128
   }
   include: { phase: TRAIN }
@@ -26,13 +26,13 @@ layers {
   top: "data"
   top: "label"
   transform_param {
-    mean_file: "train/NYUv2/NYUv2_test_mean_full_167_resize_d16.binaryproto"
+    mean_file: "train/NYUv2/test_full_167_v3/mean.binaryproto"
   }
   image_data_param {
     new_width: 227
     new_height: 227
     shuffle: 1
-    source: "train/NYUv2/test_full_167_v3/index_16_norm_randomized.txt"
+    source: "train/NYUv2/test_full_167_v3/index_16_1_norm_randomized.txt"
     batch_size: 128 
   }
   include: { phase: TEST }
@@ -273,7 +273,7 @@ layers {
   }
 
   blobs_lr: 1
-  blobs_lr: 0.5
+  blobs_lr: 0.1
 }
 layers {
   name: "relu7"
@@ -308,7 +308,7 @@ layers {
     }
   }
   blobs_lr: 1
-  blobs_lr: 0.5
+  blobs_lr: 0.1
 }
 layers {
   name: "relu_n1"
@@ -344,7 +344,7 @@ layers {
     }
   }
   blobs_lr: 1
-  blobs_lr: 0.5
+  blobs_lr: 0.1
 }
 layers {
   name: "prob"
@@ -353,7 +353,6 @@ layers {
   bottom: "label"
   top: "prob"
 }
-
 layers {
   name: "accuracy"
   type: ACCURACY
@@ -362,49 +361,4 @@ layers {
   top: "accuracy"
   include: { phase: TEST }
 }
-
-
-# Pre-sum Nonlinearity
-#layers {
-#  name: "relu8"
-#  type: RELU
-#  bottom: "fc_n2"
-#  top: "fc_n2"
-#}
-#layers {
-#  name: "drop_n2"
-#  type: DROPOUT
-#  bottom: "fc_n2"
-#  top: "fc_n2"
-#  dropout_param {
-#    dropout_ratio: 0.5
-#  }
-#}
-
-#layers {
-#  name: "prob"
-#  type: SOFTMAX
-#  bottom: "fc_n2"
-#  top: "fc_n3"
-#}
-#
-#
-#layers {
-#  name: "output_neuron"
-#  type: INNER_PRODUCT
-#  bottom: "fc_n3"
-#  #bottom: "fc_n2"
-#
-#  top: "output_neuron"
-#  inner_product_param {
-#    num_output: 1
-#  }
-#}
-#layers {
-#  name: "loss"
-#  type: EUCLIDEAN_LOSS
-#  bottom: "output_neuron"
-#  bottom: "label"
-#}
-
 
