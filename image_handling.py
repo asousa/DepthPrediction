@@ -31,6 +31,12 @@ def log_pixelate_values(array, min_val, max_val, bins):
 	val = np.reshape(np.digitize(array_vals.flatten(), cuts), array.shape)
 	return val.astype(int)
 
+def real_world_values(array, min_val, max_val, bins):
+	"""
+	Take a log pixelated array in integer values or otherwise, and convert it
+	back into real world coordinates.
+	"""
+	return min_val * np.exp(array * np.log(max_val / min_val) / (bins - 1))
 
 def segment_image(image=None, no_segments=500):
 	"""
