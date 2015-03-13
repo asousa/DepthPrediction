@@ -141,6 +141,77 @@ def gather_regions(image=None, centroids=None, x_window_size=10, y_window_size=1
 	
 	return regions
 
+def gather_depths(depths, centroids=None,
+				  depth_bins=None, depth_min=None, depth_max=None,
+				  mask=None,
+				  x_window_size=None, y_window_size=None,
+				  depth_type=None):
+	"""
+	Pulls out the needed depths from a given depth map.  If given a superpixel
+	mask, it will average the depths over each superpixel.  Otherwise, if given
+	a list of centroids, it will gather the depths at that those points or
+	average across a window of a given size if x_window_size and y_window_size
+	are both specified.  All arguments can be provided if depth_type is
+	specified.  For depth_type = 0, the depth at the centroid is returned.  For
+	depth_type = 1, the superpixel average is returned, and if depth_type = 2,
+	the window average is returned.  If depth_bins, depth_min, and depth_max
+	are provided, the log pixelated depth values are returned.
+	"""
+
+	if depth_type == 0:
+		mask = None
+		x_window_size = None
+		y_window_size = None
+	elif depth_type == 1:
+		centroids = None
+		x_window_size = None
+		y_window_size = None
+	elif depth_type == 2:
+		mask = None
+	else:
+		raise ValueError('Invalid depth_type value of %d' % depth_type)
+
+	if mask is not None:
+		mask_vals = np.unique(mask)
+		no_segments = len(mask_vals)
+		mask_flat = mask.ravel()
+		depths_flat = depths.ravel()
+		if not np.all(mask_vals == range(0, no_segments)):
+			raise ValueError('Mask does not contain values between 0 and %d' % (no_segments-1))
+	elif centroids is not None:
+		no_segments = centroids.shape[1]
+		center_pixels = np.array(centroids, dtype=int)
+	else:
+		raise ValueError('Neither mask nor centroids provided')
+
+	window_average = False
+	if (x_window_size is not None) and (y_window_size is not None):
+		window_average = True
+
+	# preallocate space for the depth values
+	segment_depths = np.zeros((no_segments, 1))
+
+	for depth_idx in range(0, no_segments):
+		if mask is not None:
+			segment_depths[depth_idx] = np.average(depths_flat[mask_flat == depth_idx])
+		elif window_average:
+			segment_depths[depth_idx] = np.average(depths[
+				max(center_pixels[0, depth_idx] - x_window_size, 0):
+				min(center_pixels[0, depth_idx] + x_window_size, depths.shape[0] - 1),
+				max(center_pixels[1, depth_idx] - y_window_size, 0):
+				min(center_pixels[1, depth_idx] + y_window_size, depths.shape[1] - 1)])
+		else:
+			segment_depths[depth_idx] = depths[center_pixels[0, depth_idx],
+		   					    			   center_pixels[1, depth_idx]]
+		
+	# Convert depths to quantized logspace:
+	if (depth_bins is not None) and (depth_min is not None) and (depth_max is not None):
+		segment_depths = \
+		log_pixelate_values(segment_depths, depth_bins, depth_min, depth_max)
+
+	return segment_depths
+
+
 def load_dataset_segments(
 	filename=None,
 	no_superpixels=500,
@@ -200,13 +271,16 @@ def create_segments_dataset(
 	y_window_size=10,
 	images=None,
 	image_output_filepath=None,
-	depth_bins=None, depth_min = None, depth_max=None):
+	depth_bins=None, depth_min = None, depth_max=None,
+	depth_type=0):
 	"""
 	Combines all of the above to load images segments and their associated
 	depths from a dataset and and return them as a tuple of ndarrays.
 
 	-To output a directory of images w/ index file, provide image_output_filepath.
 	-To quantize delivered depths into bins, provide depth_bins, depth_min, depth_max
+
+	See gather_depths for depth_type behavior.
 	"""
 
 	if images == None:
@@ -265,19 +339,16 @@ def create_segments_dataset(
 						x_window_size=x_window_size,
 						y_window_size=y_window_size)
 
-		# Pull out the appropriate depth images.
-		for depth_idx in range(0, centroids.shape[1]):
-			segment_depths[current_segment + depth_idx] = \
-					depths[image_idx,
-					       center_pixels[0, depth_idx],
-						   center_pixels[1, depth_idx]]
-
- 		# Convert depths to quantized logspace:
- 		if (depth_bins is not None):
- 			print 'quantizing depths'
- 			segment_depths[current_segment:current_segment+centroids.shape[1]] = \
- 			log_pixelate_values(segment_depths[current_segment:current_segment+centroids.shape[1]],
- 				depth_bins, depth_min, depth_max)
+		segment_depths[current_segment:(current_segment+centroids.shape[1]), ...] = \
+			gather_depths(depths[image_idx, ...],
+						  centroids=centroids,
+						  mask=mask,
+						  x_window_size=x_window_size,
+						  y_window_size=y_window_size,
+						  depth_type=depth_type,
+						  depth_bins=depth_bins,
+						  depth_min=depth_min,
+						  depth_max=depth_max)
 
  		#print image_segments[current_segment:end_index, ...].shape
  		#print end_index-current_segment
@@ -451,5 +522,106 @@ def preprocess_image(
  	else:
  		return image_segments, masks
 
+def logistic_vector_dist(vector1, vector2, gamma=1):
+	"""
+	Take two vectors, take their L2 norm, and then logistically regress that
+	value to keep the result between 0 and 1.  gamma is a parameter that
+	controls the scaling between 0 and 1 (although 0 only reached
+	asymmtotically).
+	"""
+	if not np.all(vector1.shape == vector2.shape):
+		raise ValueError('Inputs are not the same shape.')
+	return np.exp(-gamma * np.linalg.norm(vector2.ravel() - vector1.ravel()))
+
+def hist_colors(image, color_bins=256, color_min=0, color_max=255):
+	"""
+	Generate histograms of the colors contained within an image, which
+	are assumed to be in the first axis.  Any number of colors are allowed.
+	"""
+	color_hist = np.zeros((image.shape[0], color_bins))
+	color_flat = np.reshape(image, (image.shape[0], -1))
+	for color_idx in range(0, image.shape[0]):
+		color_hist[color_idx, :] = np.histogram(color_flat[color_idx, :],
+												color_bins,
+												(color_min, color_max))[0]
+	return color_hist
+
+
+def logistic_color_hist_diff(
+	image1, 
+	image2, 
+	color_bins=256, 
+	color_min=0, 
+	color_max=255, 
+	gamma=1e-4):
+	"""
+	Compare the logistically regressed distance between the color content of
+	two images by taking the histograms of the provided images, assuming the
+	color is placed in axis=0. gamma chosen purely hearuistically to provide
+	decent dynamic range as seen in image_handling_tb.ipynb, figure 14.
+	"""
+	return logistic_vector_dist(
+		hist_colors(image1, color_bins, color_min, color_max),
+		hist_colors(image2, color_bins, color_min, color_max),
+		gamma)
+
+
+def logistic_color_diff(image1, image2, gamma=4e-5):
+	"""
+	Generate a logistically regressed distance between two color images.
+	gamma chosen purely hearuistically to provide decent dynamic range
+	as seen in image_handling_tb.ipynb, figure 14.
+	"""
+	return logistic_vector_dist(image1, image2, gamma)
+
+
+def logistic_lbp_diff(image1, image2, gamma=1e-3, points=4, radius=2):
+	"""
+	Generate local binary patterns (LBP) for each of the images by taking the 
+	average across the color components (assumed to be axis = 0), and then
+	generating a LBP using a given number of points and comparing at a given
+	radius away from the center of the image.  The distance between the LBPs
+	is regressed.  gamma, points, and radius defaults chosen purely
+	hearuistically to provide decent dynamic range as seen in
+	image_handling_tb.ipynb, figure 14.
+	"""
+	return logistic_vector_dist(
+		local_binary_pattern(np.average(image1, axis=0), points, radius),
+		local_binary_pattern(np.average(image2, axis=0), points, radius),
+		gamma)
+
+
+def pairwise_distance_matrices(segments, edges=None, mask=None):
+	"""
+	Given a number of segments and the edges that connect them, or a mask from
+	which a set of edges that connect neighbors can be defined, this generates
+	a 3xlen(segments)xlen(segments) listing the distance between all of the
+	different segments.  The [i, j, k] value of the returned array represents
+	the ith type of distance metric between segments j and k.  If the segments
+	are not neighbors then the distance is left as zero.  The 3 distance
+	metrics are, 1, the logistic color difference, 2, the logistic color
+	histogram difference, and, 3, the local binary pattern difference.
+	"""
+	no_segments = len(segments)
+	distances = np.zeros((3, no_segments, no_segments))
+
+	if edges is None:
+		if mask is None:
+			raise ValueError('Neither edges nor mask provided')
+		else:
+			edges = find_neighbors(mask)
+
+	for edge in edges:
+	    distances[0, edge[0], edge[1]] = \
+	    	logistic_color_diff(segments[edge[0], ...],
+	    						segments[edge[1], ...])
+	    distances[1, edge[0], edge[1]] = \
+	    	logistic_color_hist_diff(segments[edge[0], ...],
+	    							 segments[edge[1], ...])
+	    distances[2, edge[0], edge[1]] = \
+	    	logistic_lbp_diff(segments[edge[0], ...],
+	    					  segments[edge[1], ...])
+
+	return distances
 
 
