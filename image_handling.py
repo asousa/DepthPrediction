@@ -23,9 +23,9 @@ def log_pixelate_values(array, min_val, max_val, bins):
 	spaced from the min to the max value. This should work on any dimension of
 	array.
 	"""
-	print bins
+	#print bins
 	cuts = np.logspace(np.log(min_val), np.log(max_val), num=(bins+1), base=np.e)
-	print cuts.shape
+	#print cuts.shape
 	array_vals = np.array(array[:])
 	val = np.reshape(np.digitize(array_vals.flatten(), cuts), array.shape)
 	return val.astype(int)
@@ -330,55 +330,28 @@ def create_segments_directory(
 		images = range(0, images)
 	
 	[image_set, depths] = load_dataset(input_filename)
-	no_segments = no_superpixels * len(images)
+	# no_segments = no_superpixels * len(images)
 
+	print "image_set shape: ", image_set.shape
 	# Create output directory
 	if not os.path.exists(image_output_filepath):
 		os.makedirs(image_output_filepath)
 	out_log = open(image_output_filepath + '/' + index_name,'a')
 
-	image_segments = np.ndarray([no_segments,3,2*x_window_size+1, 2*y_window_size+1])
-	segment_depths = np.ndarray(no_segments)
-	current_segment = 0
 	for image_idx in images:
 
 		print 'processing image', image_idx
-
-		image = np.array(image_set[image_idx, ...])
-		mask = segment_image(image, no_segments=no_superpixels)
-		centroids = calculate_sp_centroids(mask)
-		center_pixels = np.array(centroids, dtype=int)
-
-
-		end_index = current_segment+centroids.shape[1]
-
-		# Resize the arrays if they ended up being too small.
-		# Will probably only be called on the last image if at all.
-		if (output_images):
-			# Pull out sections around the centroid of the superpixel
-			image_segments[current_segment:end_index, ...] = \
-					gather_regions(image, centroids,
-							x_window_size=x_window_size,
-							y_window_size=y_window_size)
-
-	    # Pull out the appropriate depth images.
- 		for depth_idx in range(0, centroids.shape[1]):
- 			segment_depths[current_segment + depth_idx] = \
- 					depths[image_idx,
- 					       center_pixels[0, depth_idx],
- 						   center_pixels[1, depth_idx]]
-
-		# Convert depths to quantized logspace:
-		#print 'quantizing depths'
-		segment_depths[current_segment:current_segment+centroids.shape[1]] = \
-		log_pixelate_values(segment_depths[current_segment:current_segment+centroids.shape[1]],
-			bins=depth_bins, min_val=depth_min, max_val=depth_max)
+		
+		# Preprocess image 
+		[image_segments, mask, segment_depths] = preprocess_image(image_set[image_idx[0]],true_depth=depths[image_idx[0]],
+			no_superpixels=no_superpixels, x_window_size=x_window_size,y_window_size=y_window_size,
+			depth_bins=depth_bins,depth_min=depth_min,depth_max=depth_max);
 
  		#print image_segments[current_segment:end_index, ...].shape
  		#print end_index-current_segment
-		for i in range(current_segment,end_index):
+		for i in range(image_segments.shape[0]):
 			#name = image_output_filepath + '/' + str(image_idx) + '_' + str(i-current_segment) + '.jpg'
-			name = str(image_idx) + '_' + str(i-current_segment) + '.jpg'
+			name = str(image_idx) + '_' + str(i) + '.jpg'
 
 			# write image
 			#print image_segments[i, ...].shape
@@ -386,10 +359,7 @@ def create_segments_directory(
 			if output_images:
 				scipy.misc.imsave(image_output_filepath + '/' + name,np.transpose(image_segments[i, ...],(0,2,1)))
 
-			out_log.write(name + ' ' + str(int(segment_depths[i])) + '\n')
-
-
- 		current_segment = current_segment + centroids.shape[1]
+			out_log.write(image_output_filepath + '/' + name + ' ' + str(int(segment_depths[i])) + '\n')
 
 
 def find_neighbors(mask):
@@ -451,7 +421,7 @@ def preprocess_image(
 
 
 	#plt.imshow(image)
-	print image.shape
+	#print image.shape
 	masks = segment_image(image, no_segments=no_superpixels)
 	centroids = calculate_sp_centroids(masks)
 	center_pixels = np.array(centroids, dtype=int)
