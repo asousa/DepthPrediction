@@ -1,52 +1,6 @@
 # Pretrained via softmax classifier; now stepping forward to Euclidean
 name: "Unary depth regressor, softmax version: directory input"
 
-# use this style for running mode
-#input: "data"
-#input_dim: 16
-#input_dim: 3
-#input_dim: 227
-#input_dim: 227
-
-### LMDB INPUTS
-#layers {
-#  name: "data"
-#  type: DATA
-#  top: "data"
-#  top: "label"
-#  transform_param {
-#    #mirror: true
-#    #crop_size: 227
-#    # (Mean file is same for d16 and d128)
-#    mean_file: "train/NYUv2/NYUv2_train_mean_full_167_resize_d16.binaryproto"
-#  }
-#  data_param {
-#    source: "train/NYUv2/NYUv2_train_full_167_resize_d128_lmdb"
-#    backend: LMDB
-#    batch_size: 128
-#  }
-#  include: { phase: TRAIN }
-#}
-#
-#layers {  
-#  name: "data"
-#  type: DATA
-#  top: "data"
-#  top: "label"
-#  transform_param {
-#    #mirror: true
-#    #crop_size: 227
-#    mean_file: "train/NYUv2/NYUv2_test_mean_full_167_resize_d16.binaryproto"
-#  }
-#  data_param {
-#    source: "train/NYUv2/NYUv2_test_full_167_resize_d128_lmdb"
-#    batch_size: 128 
-#    backend: LMDB
-#  }
-#  include: { phase: TEST }
-#}
-
-
 layers {
   name: "data"
   type: IMAGE_DATA
@@ -55,12 +9,12 @@ layers {
   transform_param {
     # (Mean file is same for d16 and d128)
     mean_file: "train/NYUv2/NYUv2_train_mean_full_167_resize_d16.binaryproto"
-  }
+  } 
   image_data_param {
     new_width: 227
     new_height: 227
     shuffle: 1
-    source: "train/NYUv2/train_full_167_v2/index_16_norm.txt"
+    source: "train/NYUv2/train_full_167_v3/index_16_norm_randomized.txt"
     batch_size: 128
   }
   include: { phase: TRAIN }
@@ -78,7 +32,7 @@ layers {
     new_width: 227
     new_height: 227
     shuffle: 1
-    source: "train/NYUv2/test_full_167_v2/index_16_norm.txt"
+    source: "train/NYUv2/test_full_167_v3/index_16_norm_randomized.txt"
     batch_size: 128 
   }
   include: { phase: TEST }

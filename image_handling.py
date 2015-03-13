@@ -2,7 +2,6 @@ import h5py
 import numpy as np
 from skimage.segmentation import slic
 from skimage.segmentation import mark_boundaries
-from skimage.feature import local_binary_pattern
 import os
 import scipy
 import matplotlib.pyplot as plt
@@ -24,7 +23,9 @@ def log_pixelate_values(array, min_val, max_val, bins):
 	spaced from the min to the max value. This should work on any dimension of
 	array.
 	"""
-	cuts = np.logspace(np.log(min_val), np.log(max_val), num=bins, base=np.e)
+	#print bins
+	cuts = np.logspace(np.log(min_val), np.log(max_val), num=(bins+1), base=np.e)
+	#print cuts.shape
 	array_vals = np.array(array[:])
 	val = np.reshape(np.digitize(array_vals.flatten(), cuts), array.shape)
 	return val.astype(int)
@@ -54,6 +55,20 @@ def calculate_sp_centroids(mask=None):
 	2 x n array with x in (0, :) and y in (1, :)
 	"""
 	pixel_ids = np.unique(mask)
+
+	# Thought I could vectorize this an make it faster... nope
+	#
+	# pixel_com = np.tile(pixel_ids, [mask.shape[0], mask.shape[1], 1])
+	# mask_com = np.tile(mask, [len(pixel_ids), 1, 1]).transpose(1, 2, 0)
+	# com_mat = mask_com == pixel_com
+
+	# pixel_counts = com_mat.sum(axis=(0,1))
+
+	# weight_x = np.tile(range(0, mask.shape[0]), [len(pixel_ids), 1]).transpose()
+	# weight_y = np.tile(range(0, mask.shape[1]), [len(pixel_ids), 1]).transpose()
+
+	# centroids = np.vstack(((com_mat.sum(axis=1) * weight_x).sum(0) / pixel_counts, 
+	# 	                   (com_mat.sum(axis=0) * weight_y).sum(0) / pixel_counts))
 
 	centroids = np.zeros((2, len(pixel_ids)))
 	weight_x = np.array(range(0, mask.shape[0]))
@@ -97,30 +112,14 @@ def gather_regions(image=None, centroids=None, x_window_size=10, y_window_size=1
 			# Deal with the x size first and then handle any adjustments
 			# necessary in y
 			if x_left < 0:
-				image_region = np.concatenate((np.zeros((image_region.shape[0],
-														 x_width - image_region.shape[1],
-														 image_region.shape[2])),
-											   image_region),
-											  axis=1)
+				image_region = np.concatenate((np.zeros((image_region.shape[0], x_width - image_region.shape[1], image_region.shape[2])), image_region), axis=1)
 			elif x_right >= image.shape[1]:
-				image_region = np.concatenate((image_region,
-											   np.zeros((image_region.shape[0],
-											   			 x_width - image_region.shape[1],
-											   			 image_region.shape[2]))),
-											   			axis=1)
+				image_region = np.concatenate((image_region, np.zeros((image_region.shape[0], x_width - image_region.shape[1], image_region.shape[2]))), axis=1)
 
 			if y_left < 0:
-				image_region = np.concatenate((np.zeros((image_region.shape[0],
-				 									     image_region.shape[1],
-				 										 y_width - image_region.shape[2])),
-											   image_region),
-											  axis=2)
+				image_region = np.concatenate((np.zeros((image_region.shape[0], image_region.shape[1], y_width - image_region.shape[2])), image_region), axis=2)
 			elif y_right >= image.shape[2]:
-				image_region = np.concatenate((image_region,
-											   np.zeros((image_region.shape[0],
-											   			 image_region.shape[1],
-											   			 y_width - image_region.shape[2]))),
-											  axis=2)
+				image_region = np.concatenate((image_region, np.zeros((image_region.shape[0], image_region.shape[1], y_width - image_region.shape[2]))), axis=2)
 			# Save into our return array
 			regions[pixel, ...] = image_region
 
@@ -147,7 +146,6 @@ def gather_regions(image=None, centroids=None, x_window_size=10, y_window_size=1
 			regions[pixel, ...] = image[:, x_left:x_right, y_left:y_right]
 	
 	return regions
-
 
 def gather_depths(depths, centroids=None,
 				  depth_bins=None, depth_min=None, depth_max=None,
@@ -224,14 +222,11 @@ def load_dataset_segments(
 	filename=None,
 	no_superpixels=500,
 	images=None,
-	x_window_size=84,
-	y_window_size=84,
-	depth_type=0):
+	x_window_size=10,
+	y_window_size=10):
 	"""
 	Combines all of the above to load images segments and their associated
 	depths from a dataset and and return them as a tuple of ndarrays.
-
-	See gather_depths for depth_type behavior.
 	"""
 	if images == None:
 		images = range(0, images.shape[0])
@@ -264,19 +259,14 @@ def load_dataset_segments(
 
 		image_segments[current_segment:(current_segment+centroids.shape[1]), ...] = \
 			gather_regions(image, centroids, x_window_size=x_window_size, y_window_size=y_window_size)
-
-		segment_depths[current_segment:(current_segment+centroids.shape[1]), ...] = \
-			gather_depths(depths[image_idx, ...],
-						  centroids=centroids,
-						  mask=mask,
-						  x_window_size=x_window_size,
-						  y_window_size=y_window_size,
-						  depth_type=depth_type)
-
+		for depth_idx in range(0, centroids.shape[1]):
+			segment_depths[current_segment + depth_idx] = \
+				depths[image_idx, center_pixels[0, depth_idx], center_pixels[1 , depth_idx]]
 		current_segment = current_segment + centroids.shape[1]
 		current_image = current_image + 1
 
 	return image_segments[0:current_segment, ...], segment_depths[0:current_segment, ...], masks
+
 
 
 def create_segments_dataset(
@@ -390,6 +380,13 @@ def create_segments_dataset(
 		segment_superpixel_index.resize((current_segment,) + segment_superpixel_index.shape[1:])
 	return output_file
 
+
+def apply_depths(segment_depths, mask):
+	depth_image = np.zeros(mask.shape, dtype=segment_depths.dtype)
+	for depth_index in range(0, len(segment_depths)):
+		depth_image += segment_depths[depth_index] * (mask == depth_index)
+	return depth_image
+
 def create_segments_directory(
 	input_filename=None,
 	image_output_filepath=None,
@@ -398,13 +395,11 @@ def create_segments_directory(
 	y_window_size=10,
 	images=None,
 	depth_bins=None, depth_min = None, depth_max=None,
-	depth_type=0):
+	output_images=True, index_name='index.txt'):
 	"""
 	outputs a directory of image segments, with index file.
-
-	See gather_depths for depth_type behavior.
 	"""
-
+	#print 'loop depth_bins = ', depth_bins
 	# Select which images to work with
 	if images == None:
 		images = range(0, image_set.shape[0])
@@ -412,65 +407,36 @@ def create_segments_directory(
 		images = range(0, images)
 	
 	[image_set, depths] = load_dataset(input_filename)
-	no_segments = no_superpixels * len(images)
+	# no_segments = no_superpixels * len(images)
 
+	print "image_set shape: ", image_set.shape
 	# Create output directory
 	if not os.path.exists(image_output_filepath):
 		os.makedirs(image_output_filepath)
-	out_log = open(image_output_filepath + '/index.txt','a')
+	out_log = open(image_output_filepath + '/' + index_name,'a')
 
-	image_segments = np.ndarray([no_segments,3,2*x_window_size+1, 2*y_window_size+1])
-	segment_depths = np.ndarray(no_segments)
-	current_segment = 0
 	for image_idx in images:
 
 		print 'processing image', image_idx
-
-		image = np.array(image_set[image_idx, ...])
-		mask = segment_image(image, no_segments=no_superpixels)
-		centroids = calculate_sp_centroids(mask)
-		center_pixels = np.array(centroids, dtype=int)
-
-
-		end_index = current_segment+centroids.shape[1]
-
-		# Resize the arrays if they ended up being too small.
-		# Will probably only be called on the last image if at all.
 		
-		# Pull out sections around the centroid of the superpixel
-		image_segments[current_segment:end_index, ...] = \
-				gather_regions(image, centroids,
-						x_window_size=x_window_size,
-						y_window_size=y_window_size)
-
-		segment_depths[current_segment:(current_segment+centroids.shape[1]), ...] = \
-			gather_depths(depths[image_idx, ...],
-						  centroids=centroids,
-						  mask=mask,
-						  x_window_size=x_window_size,
-						  y_window_size=y_window_size,
-						  depth_type=depth_type,
-						  depth_bins=depth_bins,
-						  depth_min=depth_min,
-						  depth_max=depth_max)
-
+		# Preprocess image 
+		[image_segments, mask, segment_depths] = preprocess_image(image_set[image_idx[0]],true_depth=depths[image_idx[0]],
+			no_superpixels=no_superpixels, x_window_size=x_window_size,y_window_size=y_window_size,
+			depth_bins=depth_bins,depth_min=depth_min,depth_max=depth_max);
 
  		#print image_segments[current_segment:end_index, ...].shape
  		#print end_index-current_segment
-		for i in range(current_segment,end_index):
+		for i in range(image_segments.shape[0]):
 			#name = image_output_filepath + '/' + str(image_idx) + '_' + str(i-current_segment) + '.jpg'
-			name = str(image_idx) + '_' + str(i-current_segment) + '.jpg'
+			name = str(image_idx) + '_' + str(i) + '.jpg'
 
 			# write image
 			#print image_segments[i, ...].shape
 			#plt.imshow(image_segments[i, ...])
-			scipy.misc.imsave(image_output_filepath + '/' + name,np.transpose(image_segments[i, ...],(0,2,1)))
-			# append to log
-			#print segment_depths[i]
-			out_log.write(name + ' ' + str(int(segment_depths[i])) + '\n')
+			if output_images:
+				scipy.misc.imsave(image_output_filepath + '/' + name,np.transpose(image_segments[i, ...],(0,2,1)))
 
-
- 		current_segment = current_segment + centroids.shape[1]
+			out_log.write(image_output_filepath + '/' + name + ' ' + str(int(segment_depths[i])) + '\n')
 
 
 def find_neighbors(mask):
@@ -506,17 +472,61 @@ def find_neighbors(mask):
                 idx_edge += 1
     return edges
 
-
-def apply_depths(segment_depths, mask):
+def preprocess_image(
+	image, true_depth=None,
+	no_superpixels=200,
+	x_window_size=10,
+	y_window_size=10,
+	depth_bins=None, depth_min = None, depth_max=None):
 	"""
-	Given a list of depths and a superpixel mask, create a depth map that can
-	be displayed as an image.
+	Returns image segments, etc.
 	"""
-	depth_image = np.zeros(mask.shape, dtype=segment_depths.dtype)
-	for depth_index in range(0, len(segment_depths)):
-		depth_image += segment_depths[depth_index] * (mask == depth_index)
-	return depth_image
+	#print 'loop depth_bins = ', depth_bins
+	# Select which images to work with
+	# if images == None:
+	# 	images = range(0, image_set.shape[0])
+	# if type(images) is not tuple:
+	# 	images = range(0, images)
+	
+	# [image_set, depths] = load_dataset(input_filename)
+	no_segments = no_superpixels  #* len(images)
 
+	
+	image_segments = np.ndarray([no_segments,3,2*x_window_size+1, 2*y_window_size+1])
+	segment_depths = np.ndarray(no_segments)
+	
+
+
+	#plt.imshow(image)
+	#print image.shape
+	masks = segment_image(image, no_segments=no_superpixels)
+	centroids = calculate_sp_centroids(masks)
+	center_pixels = np.array(centroids, dtype=int)
+
+	# Pull out sections around the centroid of the superpixel
+	image_segments = \
+			gather_regions(image, centroids,
+					x_window_size=x_window_size,
+					y_window_size=y_window_size)
+
+	# # If provided depth maps, quantize and return those too
+	if true_depth is not None:
+	#     Pull out the appropriate depth images.
+		for depth_idx in range(0, centroids.shape[1]):
+			segment_depths[depth_idx] = \
+					true_depth[center_pixels[0, depth_idx],
+						   	   center_pixels[1, depth_idx]]
+
+	 	# Convert depths to quantized logspace:
+	 	#print 'quantizing depths'
+	 	segment_depths = log_pixelate_values(segment_depths,
+	 		bins=depth_bins, min_val=depth_min, max_val=depth_max)
+
+
+	if true_depth is not None:
+ 		return image_segments, masks, segment_depths
+ 	else:
+ 		return image_segments, masks
 
 def logistic_vector_dist(vector1, vector2, gamma=1):
 	"""
@@ -528,7 +538,6 @@ def logistic_vector_dist(vector1, vector2, gamma=1):
 	if not np.all(vector1.shape == vector2.shape):
 		raise ValueError('Inputs are not the same shape.')
 	return np.exp(-gamma * np.linalg.norm(vector2.ravel() - vector1.ravel()))
-
 
 def hist_colors(image, color_bins=256, color_min=0, color_max=255):
 	"""
@@ -620,3 +629,5 @@ def pairwise_distance_matrices(segments, edges=None, mask=None):
 	    					  segments[edge[1], ...])
 
 	return distances
+
+
