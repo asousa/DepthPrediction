@@ -2,6 +2,7 @@ import h5py
 import numpy as np
 from skimage.segmentation import slic
 from skimage.segmentation import mark_boundaries
+from skimage.feature import local_binary_pattern
 import os
 import scipy
 import matplotlib.pyplot as plt
@@ -629,5 +630,52 @@ def pairwise_distance_matrices(segments, edges=None, mask=None):
 	    					  segments[edge[1], ...])
 
 	return distances
+
+
+
+
+def graph_cut_pairwise_array(
+		segments,
+		edges=None,
+		mask=None,
+		distance_type=1):
+	"""
+	Given a number of segments and the edges that connect them, or a mask from
+	which a set of edges that connect neighbors can be defined, this generates
+	an array len(edges)x3 listing the distance between all of the edges. The
+	first two columns represent the edges of the graph and the third column is
+	the edge weight. The 3 distance metrics are, 0, the logistic color
+	difference, 1, the logistic color histogram difference (default), and, 2,
+	the local binary pattern difference.
+	"""
+	no_segments = len(segments)
+
+	if edges is None:
+		if mask is None:
+			raise ValueError('Neither edges nor mask provided')
+		else:
+			edges = find_neighbors(mask)
+
+	graph_cut_array = np.zeros((edges.shape[0], edges.shape[1] + 1))
+	graph_cut_array[:, 0:edges.shape[1]] = edges
+
+	edge_idx = 0
+	for edge in edges:
+		if distance_type == 0:
+			graph_cut_array[edge_idx, -1] = \
+	    		logistic_color_diff(segments[edge[0], ...],
+	    						segments[edge[1], ...])
+		elif distance_type == 1:
+			graph_cut_array[edge_idx, -1] = \
+				logistic_color_hist_diff(segments[edge[0], ...],
+										 segments[edge[1], ...])
+		elif distance_type == 2:
+			graph_cut_array[edge_idx, -1] = \
+				logistic_lbp_diff(segments[edge[0], ...],
+								  segments[edge[1], ...])
+		else:
+			raise ValueError('Invalid distance_type of %d given' % distance_type)
+		edge_idx += 1
+	return graph_cut_array
 
 
