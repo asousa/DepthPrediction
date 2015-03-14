@@ -93,7 +93,7 @@ def gather_regions(image=None, centroids=None, x_window_size=10, y_window_size=1
 	"""
 	x_width = 2 * x_window_size + 1
 	y_width = 2 * y_window_size + 1
-	regions = np.zeros((centroids.shape[1], 3, x_width,  y_width))
+	regions = np.zeros((centroids.shape[1], 3, x_width,  y_width), dtype=image.dtype)
 	center_pixels = np.array(centroids, dtype=int)
 	for pixel in range(0, center_pixels.shape[1]):
 		x = center_pixels[0, pixel]
