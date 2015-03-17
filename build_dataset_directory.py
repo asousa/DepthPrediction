@@ -21,7 +21,7 @@ from image_handling import create_segments_directory
 
 min_depth = 0.7;
 max_depth = 10;
-depth_bins = 16;
+depth_bins = 32;
 
 window_size = 83; # 167x167~NYUv2 paper # 227x227, imagenet standard
 n_superpixels = 400;

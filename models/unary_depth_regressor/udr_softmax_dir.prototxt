@@ -1,5 +1,4 @@
-# Pretrained via softmax classifier; now stepping forward to Euclidean
-name: "Unary depth regressor, softmax version: directory input"
+name: "Unary depth regressor, softmax version: directory input. Center depth values:"
 
 layers {
   name: "data"
@@ -14,7 +13,7 @@ layers {
     new_width: 227
     new_height: 227
     shuffle: 1
-    source: "train/NYUv2/train_full_167_v3/index_16_1_norm_randomized.txt"
+    source: "train/NYUv2/train_full_167_v3/index_16_norm_randomized.txt"
     batch_size: 128
   }
   include: { phase: TRAIN }
@@ -32,7 +31,7 @@ layers {
     new_width: 227
     new_height: 227
     shuffle: 1
-    source: "train/NYUv2/test_full_167_v3/index_16_1_norm_randomized.txt"
+    source: "train/NYUv2/test_full_167_v3/index_16_norm_randomized.txt"
     batch_size: 128 
   }
   include: { phase: TEST }
@@ -237,8 +236,8 @@ layers {
       value: 0
     }
   }
-  blobs_lr: 1
-  blobs_lr: 0.1
+  blobs_lr: 0
+  blobs_lr: 0
 }
 layers {
   name: "relu6"
@@ -273,7 +272,7 @@ layers {
   }
 
   blobs_lr: 1
-  blobs_lr: 0.1
+  blobs_lr: 1
 }
 layers {
   name: "relu7"
@@ -308,7 +307,7 @@ layers {
     }
   }
   blobs_lr: 1
-  blobs_lr: 0.1
+  blobs_lr: 1
 }
 layers {
   name: "relu_n1"
@@ -344,7 +343,7 @@ layers {
     }
   }
   blobs_lr: 1
-  blobs_lr: 0.1
+  blobs_lr: 1
 }
 layers {
   name: "prob"

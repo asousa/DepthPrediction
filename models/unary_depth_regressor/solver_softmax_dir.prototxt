@@ -5,14 +5,14 @@ test_interval:1000
 # lr for fine-tuning should be lower than when starting from scratch
 base_lr: 0.001  
 lr_policy: "step"
-gamma: 0.4
+gamma: 0.5
 # stepsize should also be lower, as we're closer to being done
-stepsize: 10000 # Interval between learning_rate drops
+stepsize: 5000 # Interval between learning_rate drops
 display: 20
 max_iter: 40000
 momentum: 0.9
 weight_decay: 0.0005
 snapshot: 1000
-snapshot_prefix: "models/unary_depth_regressor/snapshots_softmax/udr_softmax_dir_16_norm_superpixel_avg"
+snapshot_prefix: "models/unary_depth_regressor/snapshots_softmax/softmax_centerdepth"
 # uncomment the following to default to CPU mode solving
 # solver_mode: CPU
