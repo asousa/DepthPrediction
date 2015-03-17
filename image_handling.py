@@ -24,11 +24,9 @@ def log_pixelate_values(array, min_val, max_val, bins):
 	spaced from the min to the max value. This should work on any dimension of
 	array.
 	"""
-	#print bins
 	cuts = np.logspace(np.log(min_val), np.log(max_val), num=(bins+1), base=np.e)
-	#print cuts.shape
 	array_vals = np.array(array[:])
-	val = np.reshape(np.digitize(array_vals.flatten(), cuts), array.shape)
+	val = np.reshape(np.digitize(array_vals.flatten(), cuts) - 1, array.shape)
 	return val.astype(int)
 
 def real_world_values(array, min_val, max_val, bins):
@@ -56,20 +54,6 @@ def calculate_sp_centroids(mask=None):
 	2 x n array with x in (0, :) and y in (1, :)
 	"""
 	pixel_ids = np.unique(mask)
-
-	# Thought I could vectorize this an make it faster... nope
-	#
-	# pixel_com = np.tile(pixel_ids, [mask.shape[0], mask.shape[1], 1])
-	# mask_com = np.tile(mask, [len(pixel_ids), 1, 1]).transpose(1, 2, 0)
-	# com_mat = mask_com == pixel_com
-
-	# pixel_counts = com_mat.sum(axis=(0,1))
-
-	# weight_x = np.tile(range(0, mask.shape[0]), [len(pixel_ids), 1]).transpose()
-	# weight_y = np.tile(range(0, mask.shape[1]), [len(pixel_ids), 1]).transpose()
-
-	# centroids = np.vstack(((com_mat.sum(axis=1) * weight_x).sum(0) / pixel_counts, 
-	# 	                   (com_mat.sum(axis=0) * weight_y).sum(0) / pixel_counts))
 
 	centroids = np.zeros((2, len(pixel_ids)))
 	weight_x = np.array(range(0, mask.shape[0]))
@@ -214,7 +198,8 @@ def gather_depths(depths, centroids=None,
 	# Convert depths to quantized logspace:
 	if (depth_bins is not None) and (depth_min is not None) and (depth_max is not None):
 		segment_depths = \
-		log_pixelate_values(segment_depths, depth_bins, depth_min, depth_max)
+		log_pixelate_values(segment_depths, 
+			min_val=depth_min, max_val=depth_max, bins=depth_bins)
 
 	return segment_depths
 
@@ -224,14 +209,16 @@ def load_dataset_segments(
 	no_superpixels=500,
 	images=None,
 	x_window_size=10,
-	y_window_size=10):
+	y_window_size=10,
+	depth_bins=None, depth_min = None, depth_max=None,
+	depth_type=0):
 	"""
 	Combines all of the above to load images segments and their associated
 	depths from a dataset and and return them as a tuple of ndarrays.
 	"""
 	if images == None:
 		images = range(0, images.shape[0])
-	if type(images) is not tuple:
+	if ((type(images) is not tuple) and (type(images) is not list)):
 		images = range(0, images)
 	
 	[image_set, depths] = load_dataset(filename)
@@ -260,9 +247,18 @@ def load_dataset_segments(
 
 		image_segments[current_segment:(current_segment+centroids.shape[1]), ...] = \
 			gather_regions(image, centroids, x_window_size=x_window_size, y_window_size=y_window_size)
-		for depth_idx in range(0, centroids.shape[1]):
-			segment_depths[current_segment + depth_idx] = \
-				depths[image_idx, center_pixels[0, depth_idx], center_pixels[1 , depth_idx]]
+
+		segment_depths[current_segment:(current_segment+centroids.shape[1]), ...] = \
+			gather_depths(depths[image_idx, ...],
+						  centroids=centroids,
+						  mask=mask,
+						  x_window_size=x_window_size,
+						  y_window_size=y_window_size,
+						  depth_type=depth_type,
+						  depth_bins=depth_bins,
+						  depth_min=depth_min,
+						  depth_max=depth_max)
+
 		current_segment = current_segment + centroids.shape[1]
 		current_image = current_image + 1
 
