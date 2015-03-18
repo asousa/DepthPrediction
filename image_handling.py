@@ -136,7 +136,7 @@ def gather_depths(depths, centroids=None,
 				  depth_bins=None, depth_min=None, depth_max=None,
 				  mask=None,
 				  x_window_size=None, y_window_size=None,
-				  depth_type=None):
+				  depth_type=0):
 	"""
 	Pulls out the needed depths from a given depth map.  If given a superpixel
 	mask, it will average the depths over each superpixel.  Otherwise, if given
@@ -149,57 +149,63 @@ def gather_depths(depths, centroids=None,
 	are provided, the log pixelated depth values are returned.
 	"""
 
-	if depth_type == 0:
-		mask = None
-		x_window_size = None
-		y_window_size = None
-	elif depth_type == 1:
-		centroids = None
-		x_window_size = None
-		y_window_size = None
-	elif depth_type == 2:
-		mask = None
-	else:
+	if (depth_type is not 0) and (depth_type is not 1) and (depth_type is not 2):
 		raise ValueError('Invalid depth_type value of %d' % depth_type)
 
-	if mask is not None:
+	# if depth_type == 0:
+	# 	mask = None
+	# 	x_window_size = None
+	# 	y_window_size = None
+	# elif depth_type == 1:
+	# 	centroids = None
+	# 	x_window_size = None
+	# 	y_window_size = None
+	# elif depth_type == 2:
+	# 	mask = None
+	# else:
+	# 	raise ValueError('Invalid depth_type value of %d' % depth_type)
+	# print "depth type: ", depth_type
+	#if mask is not None:
+	if depth_type==1:
 		mask_vals = np.unique(mask)
 		no_segments = len(mask_vals)
 		mask_flat = mask.ravel()
 		depths_flat = depths.ravel()
 		if not np.all(mask_vals == range(0, no_segments)):
 			raise ValueError('Mask does not contain values between 0 and %d' % (no_segments-1))
-	elif centroids is not None:
+	#elif centroids is not None:
+	elif (depth_type==0) or (depth_type==2):
 		no_segments = centroids.shape[1]
 		center_pixels = np.array(centroids, dtype=int)
-	else:
-		raise ValueError('Neither mask nor centroids provided')
 
-	window_average = False
-	if (x_window_size is not None) and (y_window_size is not None):
-		window_average = True
+	#else:
+	#	raise ValueError('Neither mask nor centroids provided')
+
+	# window_average = False
+	# if (x_window_size is not None) and (y_window_size is not None):
+	# 	window_average = True
 
 	# preallocate space for the depth values
 	segment_depths = np.zeros((no_segments, 1))
 
 	for depth_idx in range(0, no_segments):
-		if mask is not None:
+		#if mask is not None:
+		if depth_type==1: 	# Superpixel average
 			segment_depths[depth_idx] = np.average(depths_flat[mask_flat == depth_idx])
-		elif window_average:
+		elif depth_type==2: # Window average
 			segment_depths[depth_idx] = np.average(depths[
 				max(center_pixels[0, depth_idx] - x_window_size, 0):
 				min(center_pixels[0, depth_idx] + x_window_size, depths.shape[0] - 1),
 				max(center_pixels[1, depth_idx] - y_window_size, 0):
 				min(center_pixels[1, depth_idx] + y_window_size, depths.shape[1] - 1)])
-		else:
+		else: # Center-value (no average)
 			segment_depths[depth_idx] = depths[center_pixels[0, depth_idx],
 		   					    			   center_pixels[1, depth_idx]]
 		
 	# Convert depths to quantized logspace:
 	if (depth_bins is not None) and (depth_min is not None) and (depth_max is not None):
 		segment_depths = \
-		log_pixelate_values(segment_depths, 
-			min_val=depth_min, max_val=depth_max, bins=depth_bins)
+		log_pixelate_values(segment_depths, bins=depth_bins, min_val=depth_min, max_val=depth_max)
 
 	return segment_depths
 
@@ -386,7 +392,7 @@ def create_segments_directory(
 	x_window_size=10,
 	y_window_size=10,
 	images=None,
-	depth_bins=None, depth_min = None, depth_max=None,
+	depth_bins=None, depth_min = None, depth_max=None, depth_type=0,
 	output_images=True, index_name='index.txt'):
 	"""
 	outputs a directory of image segments, with index file.
@@ -413,7 +419,7 @@ def create_segments_directory(
 		# Preprocess image 
 		[image_segments, mask, segment_depths] = preprocess_image(image_set[image_idx[0]],true_depth=depths[image_idx[0]],
 			no_superpixels=no_superpixels, x_window_size=x_window_size,y_window_size=y_window_size,
-			depth_bins=depth_bins,depth_min=depth_min,depth_max=depth_max);
+			depth_bins=depth_bins,depth_min=depth_min,depth_max=depth_max,depth_type=depth_type);
 
 		for i in range(image_segments.shape[0]):
 			name = str(image_idx) + '_' + str(i) + '.jpg'
@@ -463,9 +469,13 @@ def preprocess_image(
 	no_superpixels=200,
 	x_window_size=10,
 	y_window_size=10,
-	depth_bins=None, depth_min = None, depth_max=None):
+	depth_bins=None, depth_min = None, depth_max=None, depth_type=0):
 	"""
 	Returns image segments, etc.
+	Depth_type:
+		0:	Center value only
+		1:	Average over superpixel
+		2:	Average over patch
 	"""
 	no_segments = no_superpixels
 
@@ -485,16 +495,16 @@ def preprocess_image(
 
 	# # If provided depth maps, quantize and return those too
 	if true_depth is not None:
-		# Pull out the appropriate depth images.
-		for depth_idx in range(0, centroids.shape[1]):
-			segment_depths[depth_idx] = \
-					true_depth[center_pixels[0, depth_idx],
-						   	   center_pixels[1, depth_idx]]
-
-	 	# Convert depths to quantized logspace:
-	 	segment_depths = log_pixelate_values(segment_depths,
-	 		bins=depth_bins, min_val=depth_min, max_val=depth_max)
-
+		segment_depths = \
+			gather_depths(true_depth,
+					centroids=centroids,
+					mask=masks,
+					x_window_size=x_window_size,
+					y_window_size=y_window_size,
+					depth_type=depth_type,
+					depth_bins=depth_bins,
+					depth_min=depth_min,
+					depth_max=depth_max)
 
 	if true_depth is not None:
  		return image_segments, masks, segment_depths
