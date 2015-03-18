@@ -353,17 +353,12 @@ def create_segments_dataset(
 						  depth_min=depth_min,
 						  depth_max=depth_max)
 
- 		#print image_segments[current_segment:end_index, ...].shape
- 		#print end_index-current_segment
  		if indiv_output:
 			for i in range(current_segment,end_index):
 				name = image_output_filepath + '/' + str(image_idx) + '_' + str(i) + '.jpg'
 				# write image
-				#print image_segments[i, ...].shape
-				#plt.imshow(image_segments[i, ...])
 				scipy.misc.imsave(name,np.transpose(image_segments[i, ...],(0,2,1)))
 				# append to log
-				#print segment_depths[i]
 				out_log.write(name + ' ' + str(int(segment_depths[i][0])) + '\n')
 
 
@@ -396,7 +391,6 @@ def create_segments_directory(
 	"""
 	outputs a directory of image segments, with index file.
 	"""
-	#print 'loop depth_bins = ', depth_bins
 	# Select which images to work with
 	if images == None:
 		images = range(0, image_set.shape[0])
@@ -421,15 +415,10 @@ def create_segments_directory(
 			no_superpixels=no_superpixels, x_window_size=x_window_size,y_window_size=y_window_size,
 			depth_bins=depth_bins,depth_min=depth_min,depth_max=depth_max);
 
- 		#print image_segments[current_segment:end_index, ...].shape
- 		#print end_index-current_segment
 		for i in range(image_segments.shape[0]):
-			#name = image_output_filepath + '/' + str(image_idx) + '_' + str(i-current_segment) + '.jpg'
 			name = str(image_idx) + '_' + str(i) + '.jpg'
 
 			# write image
-			#print image_segments[i, ...].shape
-			#plt.imshow(image_segments[i, ...])
 			if output_images:
 				scipy.misc.imsave(image_output_filepath + '/' + name,np.transpose(image_segments[i, ...],(0,2,1)))
 
@@ -478,24 +467,12 @@ def preprocess_image(
 	"""
 	Returns image segments, etc.
 	"""
-	#print 'loop depth_bins = ', depth_bins
-	# Select which images to work with
-	# if images == None:
-	# 	images = range(0, image_set.shape[0])
-	# if type(images) is not tuple:
-	# 	images = range(0, images)
-	
-	# [image_set, depths] = load_dataset(input_filename)
-	no_segments = no_superpixels  #* len(images)
+	no_segments = no_superpixels
 
 	
 	image_segments = np.ndarray([no_segments,3,2*x_window_size+1, 2*y_window_size+1])
 	segment_depths = np.ndarray(no_segments)
 	
-
-
-	#plt.imshow(image)
-	#print image.shape
 	masks = segment_image(image, no_segments=no_superpixels)
 	centroids = calculate_sp_centroids(masks)
 	center_pixels = np.array(centroids, dtype=int)
@@ -508,14 +485,13 @@ def preprocess_image(
 
 	# # If provided depth maps, quantize and return those too
 	if true_depth is not None:
-	#     Pull out the appropriate depth images.
+		# Pull out the appropriate depth images.
 		for depth_idx in range(0, centroids.shape[1]):
 			segment_depths[depth_idx] = \
 					true_depth[center_pixels[0, depth_idx],
 						   	   center_pixels[1, depth_idx]]
 
 	 	# Convert depths to quantized logspace:
-	 	#print 'quantizing depths'
 	 	segment_depths = log_pixelate_values(segment_depths,
 	 		bins=depth_bins, min_val=depth_min, max_val=depth_max)
 
@@ -628,8 +604,6 @@ def pairwise_distance_matrices(segments, edges=None, mask=None):
 	return distances
 
 
-
-
 def graph_cut_pairwise_array(
 		segments,
 		edges=None,
@@ -673,5 +647,4 @@ def graph_cut_pairwise_array(
 			raise ValueError('Invalid distance_type of %d given' % distance_type)
 		edge_idx += 1
 	return graph_cut_array
-
 
